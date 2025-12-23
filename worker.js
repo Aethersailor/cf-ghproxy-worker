@@ -30,6 +30,220 @@ const FALLBACK_MIRRORS = [
 // ===============================================================
 
 /**
+ * 生成首页 HTML 内容
+ * Generate homepage HTML content
+ * 
+ * @returns {string} HTML 页面内容 | HTML page content
+ */
+function getHomePage() {
+    return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="GitHub Proxy - 快速访问 GitHub 资源 | Fast access to GitHub resources">
+    <title>GitHub Proxy - Cloudflare Workers</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-primary: #0a0e27; --bg-card: rgba(20, 27, 61, 0.6);
+            --text-primary: #e8eaed; --text-secondary: #9aa0a6;
+            --accent-primary: #4c9aff; --accent-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --border-color: rgba(255, 255, 255, 0.1); --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            --glow: 0 0 20px rgba(76, 154, 255, 0.3);
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: var(--bg-primary); color: var(--text-primary); line-height: 1.6;
+            min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden;
+        }
+        body::before {
+            content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at 20% 50%, rgba(102, 126, 234, 0.15) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 80%, rgba(118, 75, 162, 0.15) 0%, transparent 50%);
+            pointer-events: none; z-index: 0;
+        }
+        .container { max-width: 900px; margin: 0 auto; padding: 2rem; position: relative; z-index: 1; }
+        header { text-align: center; margin-bottom: 3rem; animation: fadeInDown 0.6s ease-out; }
+        .logo { display: inline-flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+        .logo-icon {
+            width: 56px; height: 56px; background: var(--accent-gradient); border-radius: 16px;
+            display: flex; align-items: center; justify-content: center; font-size: 28px;
+            box-shadow: var(--glow); animation: pulse 2s ease-in-out infinite;
+        }
+        h1 {
+            font-size: 2.5rem; font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text; margin-bottom: 0.5rem;
+        }
+        .subtitle { color: var(--text-secondary); font-size: 1.1rem; margin-bottom: 2rem; }
+        .card {
+            background: var(--bg-card); backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color); border-radius: 20px; padding: 2rem;
+            margin-bottom: 2rem; box-shadow: var(--shadow);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            animation: fadeInUp 0.6s ease-out;
+        }
+        .card:hover { transform: translateY(-4px); box-shadow: var(--shadow), var(--glow); }
+        .card h2 {
+            font-size: 1.5rem; margin-bottom: 1rem; color: var(--text-primary);
+            display: flex; align-items: center; gap: 0.5rem;
+        }
+        .card h3 { font-size: 1.2rem; margin-top: 1.5rem; margin-bottom: 0.8rem; color: var(--accent-primary); }
+        .format-item {
+            background: rgba(76, 154, 255, 0.05); border-left: 3px solid var(--accent-primary);
+            padding: 1.2rem; margin-bottom: 1.5rem; border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        .format-item:hover { background: rgba(76, 154, 255, 0.1); transform: translateX(4px); }
+        .format-title { font-weight: 600; color: var(--accent-primary); margin-bottom: 0.5rem; font-size: 1.05rem; }
+        .format-desc { color: var(--text-secondary); margin-bottom: 0.8rem; font-size: 0.95rem; }
+        .code-block {
+            background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-color);
+            border-radius: 8px; padding: 1rem;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9rem; color: #a8dadc; overflow-x: auto; white-space: nowrap;
+        }
+        .code-block:hover { border-color: var(--accent-primary); }
+        .github-link {
+            display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.8rem 1.5rem;
+            background: var(--accent-gradient); color: white; text-decoration: none;
+            border-radius: 12px; font-weight: 600; transition: all 0.3s ease;
+            box-shadow: var(--shadow);
+        }
+        .github-link:hover { transform: translateY(-2px); box-shadow: var(--shadow), var(--glow); }
+        footer {
+            text-align: center; padding: 2rem; color: var(--text-secondary);
+            margin-top: auto; font-size: 0.9rem;
+        }
+        footer a { color: var(--accent-primary); text-decoration: none; transition: color 0.3s ease; }
+        footer a:hover { color: #667eea; }
+        @keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+        .lang-switch { position: fixed; top: 2rem; right: 2rem; z-index: 100; }
+        .lang-btn {
+            background: var(--bg-card); backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color); color: var(--text-primary);
+            padding: 0.6rem 1.2rem; border-radius: 10px; cursor: pointer;
+            font-size: 0.9rem; transition: all 0.3s ease; font-weight: 500;
+        }
+        .lang-btn:hover { background: rgba(76, 154, 255, 0.2); border-color: var(--accent-primary); }
+        .lang-content { display: none; }
+        .lang-content.active { display: block; }
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            h1 { font-size: 2rem; }
+            .card { padding: 1.5rem; }
+            .code-block { font-size: 0.8rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="lang-switch">
+        <button class="lang-btn" onclick="toggleLanguage()">
+            <span id="lang-text">EN</span>
+        </button>
+    </div>
+    <div class="container">
+        <header>
+            <div class="logo"><div class="logo-icon">🚀</div></div>
+            <h1>GitHub Proxy</h1>
+            <p class="subtitle">
+                <span class="lang-content active" data-lang="zh">基于 Cloudflare Workers 的 GitHub 加速代理服务</span>
+                <span class="lang-content" data-lang="en">GitHub Acceleration Proxy Service Based on Cloudflare Workers</span>
+            </p>
+        </header>
+        <div class="card">
+            <h2><span>📖</span>
+                <span class="lang-content active" data-lang="zh">项目介绍</span>
+                <span class="lang-content" data-lang="en">Introduction</span>
+            </h2>
+            <p class="lang-content active" data-lang="zh">GitHub Proxy 是一个部署在 Cloudflare Workers 上的轻量级代理服务，旨在解决 GitHub 资源访问速度慢的问题。通过全球 CDN 边缘节点，为您提供快速、稳定的 GitHub 文件下载和访问体验。</p>
+            <p class="lang-content" data-lang="en">GitHub Proxy is a lightweight proxy service deployed on Cloudflare Workers, designed to solve the problem of slow GitHub resource access. Through global CDN edge nodes, it provides you with fast and stable GitHub file download and access experience.</p>
+        </div>
+        <div class="card">
+            <h2><span>🛠️</span>
+                <span class="lang-content active" data-lang="zh">使用说明</span>
+                <span class="lang-content" data-lang="en">Usage Guide</span>
+            </h2>
+            <p class="lang-content active" data-lang="zh">支持三种 URL 格式，选择任意一种即可：</p>
+            <p class="lang-content" data-lang="en">Three URL formats are supported, choose any one:</p>
+            <div class="format-item">
+                <div class="format-title">
+                    <span class="lang-content active" data-lang="zh">方案 1：完整 URL 格式</span>
+                    <span class="lang-content" data-lang="en">Format 1: Full URL</span>
+                </div>
+                <div class="format-desc lang-content active" data-lang="zh">直接在代理域名后面粘贴完整的 GitHub URL</div>
+                <div class="format-desc lang-content" data-lang="en">Paste the full GitHub URL directly after the proxy domain</div>
+                <div class="code-block">https://your-worker.workers.dev/https://github.com/user/repo/releases/download/v1.0/file.zip</div>
+            </div>
+            <div class="format-item">
+                <div class="format-title">
+                    <span class="lang-content active" data-lang="zh">方案 2：域名路径格式</span>
+                    <span class="lang-content" data-lang="en">Format 2: Domain Path</span>
+                </div>
+                <div class="format-desc lang-content active" data-lang="zh">去掉协议头（https://），从域名开始</div>
+                <div class="format-desc lang-content" data-lang="en">Remove the protocol (https://), start from the domain</div>
+                <div class="code-block">https://your-worker.workers.dev/github.com/user/repo/releases/download/v1.0/file.zip</div>
+            </div>
+            <div class="format-item">
+                <div class="format-title">
+                    <span class="lang-content active" data-lang="zh">方案 3：简化路径格式</span>
+                    <span class="lang-content" data-lang="en">Format 3: Simplified Path</span>
+                </div>
+                <div class="format-desc lang-content active" data-lang="zh">只保留用户名/仓库名/路径，最简洁的形式</div>
+                <div class="format-desc lang-content" data-lang="en">Keep only username/repo/path, the most concise format</div>
+                <div class="code-block">https://your-worker.workers.dev/user/repo/releases/download/v1.0/file.zip</div>
+            </div>
+            <h3 class="lang-content active" data-lang="zh">支持的域名</h3>
+            <h3 class="lang-content" data-lang="en">Supported Domains</h3>
+            <ul style="color: var(--text-secondary); margin-left: 2rem; margin-top: 0.5rem;">
+                <li>github.com</li>
+                <li>raw.githubusercontent.com</li>
+                <li>gist.github.com</li>
+                <li>gist.githubusercontent.com</li>
+            </ul>
+        </div>
+        <div class="card" style="text-align: center;">
+            <a href="https://github.com/Aethersailor/cf-ghproxy-worker" class="github-link" target="_blank" rel="noopener">
+                <svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+                </svg>
+                <span class="lang-content active" data-lang="zh">查看源码</span>
+                <span class="lang-content" data-lang="en">View Source Code</span>
+            </a>
+        </div>
+    </div>
+    <footer>
+        <p class="lang-content active" data-lang="zh">
+            由 <a href="https://workers.cloudflare.com/" target="_blank" rel="noopener">Cloudflare Workers</a> 强力驱动 | 
+            开源项目 <a href="https://github.com/Aethersailor/cf-ghproxy-worker" target="_blank" rel="noopener">cf-ghproxy-worker</a>
+        </p>
+        <p class="lang-content" data-lang="en">
+            Powered by <a href="https://workers.cloudflare.com/" target="_blank" rel="noopener">Cloudflare Workers</a> | 
+            Open Source Project <a href="https://github.com/Aethersailor/cf-ghproxy-worker" target="_blank" rel="noopener">cf-ghproxy-worker</a>
+        </p>
+    </footer>
+    <script>
+        let currentLang = 'zh';
+        function toggleLanguage() {
+            currentLang = currentLang === 'zh' ? 'en' : 'zh';
+            document.getElementById('lang-text').textContent = currentLang === 'zh' ? 'EN' : '中文';
+            document.querySelectorAll('.lang-content').forEach(el => {
+                if (el.dataset.lang === currentLang) { el.classList.add('active'); }
+                else { el.classList.remove('active'); }
+            });
+        }
+    </script>
+</body>
+</html>`;
+}
+
+// ==================== 配置项 Configuration ====================
+
+/**
  * 生成基于日期的缓存版本号（YYYYMMDD 格式）
  * Generate cache version based on current date (YYYYMMDD format)
  * 
@@ -285,9 +499,13 @@ export default {
         // 解析并验证 GitHub 路径 | Parse and validate GitHub path
         const githubInfo = parseGitHubPath(url.pathname);
         if (!githubInfo) {
-            return new Response("Invalid path. Usage: /[github.com]/user/repo/path/to/file", {
-                status: 400,
-                headers: { "Content-Type": "text/plain" }
+            // 显示首页 | Show homepage
+            return new Response(getHomePage(), {
+                status: 200,
+                headers: {
+                    "Content-Type": "text/html; charset=utf-8",
+                    "Cache-Control": "public, max-age=3600"
+                }
             });
         }
 
