@@ -1,0 +1,9 @@
+name = "github-proxy"
+main = "worker.js"
+compatibility_date = "2023-12-01"
+
+# Worker configuration | Worker 配置
+# https://developers.cloudflare.com/workers/configuration/
+
+[env.production]
+name = "github-proxy"
