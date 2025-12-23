@@ -322,7 +322,7 @@ x-response-time: 45ms
 
 ### ✨ Key Features
 
-- 🚀 **Zero Configuration** - No KV storage, no Cron triggers, one-click deployment
+- 🚀 **Zero Configuration** - No KV storage, one-click deployment
 - ⚡ **Intelligent Caching** - Multi-layer caching strategy with automatic TTL adjustment
 - 🌐 **Full Domain Support** - Supports `github.com`, `raw.githubusercontent.com`, `gist.github.com`, etc.
 - 📦 **Complete Features** - Resumable downloads, CORS support, ETag validation
