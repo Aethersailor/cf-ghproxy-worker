@@ -23,6 +23,7 @@ Demo: https://github-proxy.asailor.org
 - 🌐 **全域名支持** - 支持 `github.com`、`raw.githubusercontent.com`、`gist.github.com` 等
 - 📦 **完整功能** - 断点续传、CORS 支持、ETag 验证
 - 🔧 **可靠性优化** - 重试机制、超时控制、连接优化
+- 🎨 **精美首页** - 中英双语界面，支持三种 URL 格式说明
 
 ### 🎨 缓存策略
 
@@ -327,6 +328,7 @@ x-response-time: 45ms
 - 🌐 **Full Domain Support** - Supports `github.com`, `raw.githubusercontent.com`, `gist.github.com`, etc.
 - 📦 **Complete Features** - Resumable downloads, CORS support, ETag validation
 - 🔧 **Reliability** - Retry mechanism, timeout control, connection optimization
+- 🎨 **Beautiful Homepage** - Bilingual interface with three URL format examples
 
 ### 🎨 Caching Strategy
 
