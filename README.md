@@ -18,7 +18,7 @@ Demo: https://github-proxy.asailor.org
 
 ### ✨ 核心特性
 
-- 🚀 **零配置部署** - 无需 KV 存储、无需 Cron 触发器，一键即用
+- 🚀 **零配置部署** - 无需 KV 存储，一键即用
 - ⚡ **智能缓存** - 多层缓存策略，根据路径类型自动调整 TTL
 - 🌐 **全域名支持** - 支持 `github.com`、`raw.githubusercontent.com`、`gist.github.com` 等
 - 📦 **完整功能** - 断点续传、CORS 支持、ETag 验证
