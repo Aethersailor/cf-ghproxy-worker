@@ -4,9 +4,9 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-orange)](https://workers.cloudflare.com/)
 
-基于 Cloudflare Workers 的高性能 GitHub 文件加速代理服务，专为中国大陆用户优化。
+基于 Cloudflare Workers 的高性能 GitHub 文件加速代理服务。
 
-A high-performance GitHub file acceleration proxy service based on Cloudflare Workers, optimized for users in mainland China.
+A high-performance GitHub file acceleration proxy service based on Cloudflare Workers.
 
 [English](#english) | [中文](#中文)
 
@@ -20,7 +20,7 @@ A high-performance GitHub file acceleration proxy service based on Cloudflare Wo
 - ⚡ **智能缓存** - 多层缓存策略，根据路径类型自动调整 TTL
 - 🌐 **全域名支持** - 支持 `github.com`、`raw.githubusercontent.com`、`gist.github.com` 等
 - 📦 **完整功能** - 断点续传、CORS 支持、ETag 验证
-- 🎯 **中国优化** - 重试机制、超时控制、连接优化
+- 🔧 **可靠性优化** - 重试机制、超时控制、连接优化
 
 ### 🎨 缓存策略
 
@@ -315,7 +315,7 @@ x-response-time: 45ms
 - ⚡ **Intelligent Caching** - Multi-layer caching strategy with automatic TTL adjustment
 - 🌐 **Full Domain Support** - Supports `github.com`, `raw.githubusercontent.com`, `gist.github.com`, etc.
 - 📦 **Complete Features** - Resumable downloads, CORS support, ETag validation
-- 🎯 **China Optimized** - Retry mechanism, timeout control, connection optimization
+- 🔧 **Reliability** - Retry mechanism, timeout control, connection optimization
 
 ### 🎨 Caching Strategy
 
