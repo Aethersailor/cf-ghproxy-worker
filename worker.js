@@ -42,110 +42,230 @@ function getHomePage() {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="GitHub Proxy - 快速访问 GitHub 资源 | Fast access to GitHub resources">
+    <meta name="color-scheme" content="light dark">
     <title>GitHub Proxy - Cloudflare Workers</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        /* 深色主题 */
         :root {
-            --bg-primary: #0a0e27; --bg-card: rgba(20, 27, 61, 0.6);
-            --text-primary: #e8eaed; --text-secondary: #9aa0a6;
-            --accent-primary: #4c9aff; --accent-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --border-color: rgba(255, 255, 255, 0.1); --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            --bg-primary: #0a0e27;
+            --bg-secondary: #141b3d;
+            --bg-card: rgba(20, 27, 61, 0.6);
+            --text-primary: #e8eaed;
+            --text-secondary: #9aa0a6;
+            --accent-primary: #4c9aff;
+            --accent-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --border-color: rgba(255, 255, 255, 0.1);
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
             --glow: 0 0 20px rgba(76, 154, 255, 0.3);
+            --code-bg: rgba(0, 0, 0, 0.3);
+            --code-text: #a8dadc;
+            --gradient-1: rgba(102, 126, 234, 0.15);
+            --gradient-2: rgba(118, 75, 162, 0.15);
         }
+        
+        /* 浅色主题 */
+        [data-theme="light"] {
+            --bg-primary: #f5f7fa;
+            --bg-secondary: #ffffff;
+            --bg-card: rgba(255, 255, 255, 0.9);
+            --text-primary: #1a202c;
+            --text-secondary: #4a5568;
+            --accent-primary: #3b82f6;
+            --accent-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --border-color: rgba(0, 0, 0, 0.1);
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            --glow: 0 0 20px rgba(59, 130, 246, 0.3);
+            --code-bg: rgba(0, 0, 0, 0.05);
+            --code-text: #2d3748;
+            --gradient-1: rgba(102, 126, 234, 0.08);
+            --gradient-2: rgba(118, 75, 162, 0.08);
+        }
+        
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-            background: var(--bg-primary); color: var(--text-primary); line-height: 1.6;
-            min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
         body::before {
-            content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: radial-gradient(circle at 20% 50%, rgba(102, 126, 234, 0.15) 0%, transparent 50%),
-                        radial-gradient(circle at 80% 80%, rgba(118, 75, 162, 0.15) 0%, transparent 50%);
-            pointer-events: none; z-index: 0;
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 20% 50%, var(--gradient-1) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 80%, var(--gradient-2) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+            transition: opacity 0.3s ease;
         }
         .container { max-width: 900px; margin: 0 auto; padding: 2rem; position: relative; z-index: 1; }
         header { text-align: center; margin-bottom: 3rem; animation: fadeInDown 0.6s ease-out; }
         .logo { display: inline-flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
         .logo-icon {
-            width: 56px; height: 56px; background: var(--accent-gradient); border-radius: 16px;
-            display: flex; align-items: center; justify-content: center; font-size: 28px;
-            box-shadow: var(--glow); animation: pulse 2s ease-in-out infinite;
+            width: 56px;
+            height: 56px;
+            background: var(--accent-gradient);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            box-shadow: var(--glow);
+            animation: pulse 2s ease-in-out infinite;
         }
         h1 {
-            font-size: 2.5rem; font-weight: 700;
+            font-size: 2.5rem;
+            font-weight: 700;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-            background-clip: text; margin-bottom: 0.5rem;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
         }
         .subtitle { color: var(--text-secondary); font-size: 1.1rem; margin-bottom: 2rem; }
         .card {
-            background: var(--bg-card); backdrop-filter: blur(10px);
-            border: 1px solid var(--border-color); border-radius: 20px; padding: 2rem;
-            margin-bottom: 2rem; box-shadow: var(--shadow);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            background: var(--bg-card);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow);
+            transition: transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
             animation: fadeInUp 0.6s ease-out;
         }
         .card:hover { transform: translateY(-4px); box-shadow: var(--shadow), var(--glow); }
         .card h2 {
-            font-size: 1.5rem; margin-bottom: 1rem; color: var(--text-primary);
-            display: flex; align-items: center; gap: 0.5rem;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
         .card h3 { font-size: 1.2rem; margin-top: 1.5rem; margin-bottom: 0.8rem; color: var(--accent-primary); }
         .format-item {
-            background: rgba(76, 154, 255, 0.05); border-left: 3px solid var(--accent-primary);
-            padding: 1.2rem; margin-bottom: 1.5rem; border-radius: 8px;
+            background: rgba(76, 154, 255, 0.05);
+            border-left: 3px solid var(--accent-primary);
+            padding: 1.2rem;
+            margin-bottom: 1.5rem;
+            border-radius: 8px;
             transition: all 0.3s ease;
         }
         .format-item:hover { background: rgba(76, 154, 255, 0.1); transform: translateX(4px); }
         .format-title { font-weight: 600; color: var(--accent-primary); margin-bottom: 0.5rem; font-size: 1.05rem; }
         .format-desc { color: var(--text-secondary); margin-bottom: 0.8rem; font-size: 0.95rem; }
         .code-block {
-            background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-color);
-            border-radius: 8px; padding: 1rem;
+            background: var(--code-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
             font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-            font-size: 0.9rem; color: #a8dadc; overflow-x: auto; white-space: nowrap;
+            font-size: 0.9rem;
+            color: var(--code-text);
+            overflow-x: auto;
+            white-space: nowrap;
+            transition: border-color 0.3s ease, background-color 0.3s ease;
         }
         .code-block:hover { border-color: var(--accent-primary); }
         .github-link {
-            display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.8rem 1.5rem;
-            background: var(--accent-gradient); color: white; text-decoration: none;
-            border-radius: 12px; font-weight: 600; transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.8rem 1.5rem;
+            background: var(--accent-gradient);
+            color: white;
+            text-decoration: none;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
             box-shadow: var(--shadow);
         }
         .github-link:hover { transform: translateY(-2px); box-shadow: var(--shadow), var(--glow); }
         footer {
-            text-align: center; padding: 2rem; color: var(--text-secondary);
-            margin-top: auto; font-size: 0.9rem;
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            margin-top: auto;
+            font-size: 0.9rem;
         }
         footer a { color: var(--accent-primary); text-decoration: none; transition: color 0.3s ease; }
         footer a:hover { color: #667eea; }
         @keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
-        .lang-switch { position: fixed; top: 2rem; right: 2rem; z-index: 100; }
-        .lang-btn {
-            background: var(--bg-card); backdrop-filter: blur(10px);
-            border: 1px solid var(--border-color); color: var(--text-primary);
-            padding: 0.6rem 1.2rem; border-radius: 10px; cursor: pointer;
-            font-size: 0.9rem; transition: all 0.3s ease; font-weight: 500;
+        
+        /* 控制按钮组 */
+        .controls {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            z-index: 100;
+            display: flex;
+            gap: 0.75rem;
         }
-        .lang-btn:hover { background: rgba(76, 154, 255, 0.2); border-color: var(--accent-primary); }
+        .control-btn {
+            background: var(--bg-card);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.6rem 1.2rem;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .control-btn:hover {
+            background: rgba(76, 154, 255, 0.2);
+            border-color: var(--accent-primary);
+            transform: translateY(-2px);
+        }
         .lang-content { display: none; }
         .lang-content.active { display: block; }
+        
         @media (max-width: 768px) {
             .container { padding: 1rem; }
             h1 { font-size: 2rem; }
             .card { padding: 1.5rem; }
             .code-block { font-size: 0.8rem; }
+            .controls {
+                top: 1rem;
+                right: 1rem;
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            .control-btn {
+                padding: 0.5rem 1rem;
+                font-size: 0.85rem;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="lang-switch">
-        <button class="lang-btn" onclick="toggleLanguage()">
+    <!-- 控制按钮组 -->
+    <div class="controls">
+        <button class="control-btn" id="theme-btn" onclick="toggleTheme()" title="切换主题 / Toggle Theme">
+            <span id="theme-icon">🌙</span>
+            <span id="theme-text">深色</span>
+        </button>
+        <button class="control-btn" id="lang-btn" onclick="toggleLanguage()" title="切换语言 / Switch Language">
             <span id="lang-text">EN</span>
         </button>
     </div>
+
     <div class="container">
         <header>
             <div class="logo"><div class="logo-icon">🚀</div></div>
@@ -227,15 +347,71 @@ function getHomePage() {
         </p>
     </footer>
     <script>
-        let currentLang = 'zh';
+        // 检测系统偏好
+        function getSystemPreferences() {
+            const systemLang = navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en';
+            const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            return { systemLang, systemTheme };
+        }
+        
+        // 初始化
+        const { systemLang, systemTheme } = getSystemPreferences();
+        let currentLang = sessionStorage.getItem('userLang') || systemLang;
+        let currentTheme = sessionStorage.getItem('userTheme') || systemTheme;
+        
+        // 应用主题
+        function applyTheme(theme) {
+            if (theme === 'light') {
+                document.documentElement.setAttribute('data-theme', 'light');
+                document.getElementById('theme-icon').textContent = '☀️';
+                document.getElementById('theme-text').textContent = currentLang === 'zh' ? '浅色' : 'Light';
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+                document.getElementById('theme-icon').textContent = '🌙';
+                document.getElementById('theme-text').textContent = currentLang === 'zh' ? '深色' : 'Dark';
+            }
+        }
+        
+        // 应用语言
+        function applyLanguage(lang) {
+            document.getElementById('lang-text').textContent = lang === 'zh' ? 'EN' : '中文';
+            document.querySelectorAll('.lang-content').forEach(el => {
+                if (el.dataset.lang === lang) {
+                    el.classList.add('active');
+                } else {
+                    el.classList.remove('active');
+                }
+            });
+            // 更新主题按钮文字
+            applyTheme(currentTheme);
+        }
+        
+        // 切换主题
+        function toggleTheme() {
+            currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            sessionStorage.setItem('userTheme', currentTheme);
+            applyTheme(currentTheme);
+        }
+        
+        // 切换语言
         function toggleLanguage() {
             currentLang = currentLang === 'zh' ? 'en' : 'zh';
-            document.getElementById('lang-text').textContent = currentLang === 'zh' ? 'EN' : '中文';
-            document.querySelectorAll('.lang-content').forEach(el => {
-                if (el.dataset.lang === currentLang) { el.classList.add('active'); }
-                else { el.classList.remove('active'); }
-            });
+            sessionStorage.setItem('userLang', currentLang);
+            applyLanguage(currentLang);
         }
+        
+        // 监听系统主题变化
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+            // 只有在用户未手动设置时才跟随系统
+            if (!sessionStorage.getItem('userTheme')) {
+                currentTheme = e.matches ? 'dark' : 'light';
+                applyTheme(currentTheme);
+            }
+        });
+        
+        // 初始化应用设置
+        applyTheme(currentTheme);
+        applyLanguage(currentLang);
     </script>
 </body>
 </html>`;
