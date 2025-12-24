@@ -10,8 +10,6 @@ A high-performance GitHub file acceleration proxy service based on Cloudflare Wo
 
 [English](#english) | [中文](#中文)
 
-Demo: https://github-proxy.asailor.org
-
 ---
 
 ## 中文
