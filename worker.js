@@ -15,9 +15,12 @@ const REQUEST_TIMEOUT_MS = 30000;     // 请求超时：30 秒 | Request timeout
 // 支持的 GitHub 域名 | Supported GitHub domains
 const GITHUB_HOSTS = [
     "github.com",
+    "api.github.com",
     "raw.githubusercontent.com",
     "gist.github.com",
-    "gist.githubusercontent.com"
+    "gist.githubusercontent.com",
+    "github.githubassets.com",
+    "codeload.github.com"
 ];
 
 // 备用镜像源（可选，用于降级）| Fallback mirrors (optional, for degradation)
@@ -322,9 +325,12 @@ function getHomePage(domain = 'https://your-worker.workers.dev') {
             <h3 class="lang-content" data-lang="en">Supported Domains</h3>
             <ul style="color: var(--text-secondary); margin-left: 2rem; margin-top: 0.5rem;">
                 <li>github.com</li>
+                <li>api.github.com</li>
                 <li>raw.githubusercontent.com</li>
                 <li>gist.github.com</li>
                 <li>gist.githubusercontent.com</li>
+                <li>github.githubassets.com</li>
+                <li>codeload.github.com</li>
             </ul>
         </div>
         <div class="card" style="text-align: center;">
