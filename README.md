@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🚀 GitHub Proxy
+# 🚀 Cloudflare GitHub-Proxy Worker
 
 **High-Performance GitHub Acceleration Proxy on Cloudflare Workers**
 
