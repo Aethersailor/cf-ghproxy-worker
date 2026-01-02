@@ -506,45 +506,45 @@ function getHomePage(domain = 'https://your-worker.workers.dev') {
                 <span class="lang-content active" data-lang="zh">使用说明</span>
                 <span class="lang-content" data-lang="en">Usage Guide</span>
             </h2>
-            <p class="lang-content active" data-lang="zh">支持三种 URL 格式，选择任意一种即可：</p>
-            <p class="lang-content" data-lang="en">Three URL formats are supported, choose any one:</p>
+            <p class="lang-content active" data-lang="zh">将 GitHub 链接的域名替换为代理域名即可使用：</p>
+            <p class="lang-content" data-lang="en">Replace the GitHub domain with the proxy domain:</p>
             <div class="format-item">
                 <div class="format-title">
-                    <span class="lang-content active" data-lang="zh">方案 1：完整 URL 格式</span>
-                    <span class="lang-content" data-lang="en">Format 1: Full URL</span>
+                    <span class="lang-content active" data-lang="zh">📦 下载 Release 文件</span>
+                    <span class="lang-content" data-lang="en">📦 Download Release Files</span>
                 </div>
-                <div class="format-desc lang-content active" data-lang="zh">直接在代理域名后面粘贴完整的 GitHub URL</div>
-                <div class="format-desc lang-content" data-lang="en">Paste the full GitHub URL directly after the proxy domain</div>
-                <div class="code-block">${domain}/https://github.com/user/repo/releases/download/v1.0/file.zip</div>
-            </div>
-            <div class="format-item">
-                <div class="format-title">
-                    <span class="lang-content active" data-lang="zh">方案 2：域名路径格式</span>
-                    <span class="lang-content" data-lang="en">Format 2: Domain Path</span>
-                </div>
-                <div class="format-desc lang-content active" data-lang="zh">去掉协议头（https://），从域名开始</div>
-                <div class="format-desc lang-content" data-lang="en">Remove the protocol (https://), start from the domain</div>
+                <div class="format-desc lang-content active" data-lang="zh">github.com 仓库文件下载</div>
+                <div class="format-desc lang-content" data-lang="en">Download files from github.com</div>
                 <div class="code-block">${domain}/github.com/user/repo/releases/download/v1.0/file.zip</div>
             </div>
             <div class="format-item">
                 <div class="format-title">
-                    <span class="lang-content active" data-lang="zh">方案 3：简化路径格式</span>
-                    <span class="lang-content" data-lang="en">Format 3: Simplified Path</span>
+                    <span class="lang-content active" data-lang="zh">📄 获取 Raw 文件</span>
+                    <span class="lang-content" data-lang="en">📄 Get Raw Files</span>
                 </div>
-                <div class="format-desc lang-content active" data-lang="zh">只保留用户名/仓库名/路径，最简洁的形式</div>
-                <div class="format-desc lang-content" data-lang="en">Keep only username/repo/path, the most concise format</div>
-                <div class="code-block">${domain}/user/repo/releases/download/v1.0/file.zip</div>
+                <div class="format-desc lang-content active" data-lang="zh">raw.githubusercontent.com 原始文件</div>
+                <div class="format-desc lang-content" data-lang="en">Raw files from raw.githubusercontent.com</div>
+                <div class="code-block">${domain}/raw.githubusercontent.com/user/repo/main/file.txt</div>
+            </div>
+            <div class="format-item">
+                <div class="format-title">
+                    <span class="lang-content active" data-lang="zh">📋 Gist 代码片段</span>
+                    <span class="lang-content" data-lang="en">📋 Gist Snippets</span>
+                </div>
+                <div class="format-desc lang-content active" data-lang="zh">gist.githubusercontent.com 代码片段</div>
+                <div class="format-desc lang-content" data-lang="en">Code snippets from gist.githubusercontent.com</div>
+                <div class="code-block">${domain}/gist.githubusercontent.com/user/gist-id/raw/file.txt</div>
             </div>
             <h3 class="lang-content active" data-lang="zh">支持的域名</h3>
             <h3 class="lang-content" data-lang="en">Supported Domains</h3>
             <ul style="color: var(--text-secondary); margin-left: 2rem; margin-top: 0.5rem;">
                 <li>github.com</li>
-                <li>api.github.com</li>
                 <li>raw.githubusercontent.com</li>
-                <li>gist.github.com</li>
                 <li>gist.githubusercontent.com</li>
-                <li>github.githubassets.com</li>
+                <li>gist.github.com</li>
+                <li>api.github.com</li>
                 <li>codeload.github.com</li>
+                <li>github.githubassets.com</li>
             </ul>
         </div>
         <div class="card" style="text-align: center;">
@@ -683,7 +683,7 @@ function getHomePage(domain = 'https://your-worker.workers.dev') {
             }
         }
         
-        // 转换为代理 URL
+        // 转换为代理 URL（统一使用域名路径格式）
         function convertToProxyUrl(url) {
             try {
                 // 清理 URL
@@ -693,11 +693,7 @@ function getHomePage(domain = 'https://your-worker.workers.dev') {
                 if (url.startsWith('https://') || url.startsWith('http://')) {
                     const parsed = new URL(url);
                     if (SUPPORTED_HOSTS.includes(parsed.hostname)) {
-                        // 对于 github.com，使用简化格式（后端默认识别）
-                        if (parsed.hostname === 'github.com') {
-                            return PROXY_DOMAIN + parsed.pathname + parsed.search + parsed.hash;
-                        }
-                        // 对于其他域名（raw.githubusercontent.com 等），保留域名信息
+                        // 统一使用域名路径格式，清晰明确
                         return PROXY_DOMAIN + '/' + parsed.hostname + parsed.pathname + parsed.search + parsed.hash;
                     }
                 }
