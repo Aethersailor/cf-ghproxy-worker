@@ -10,7 +10,7 @@
 
 [![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Aethersailor/cf-ghproxy-worker)
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPLv3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
 [![Maintained](https://img.shields.io/badge/Maintained-Yes-green.svg)](https://github.com/Aethersailor/cf-ghproxy-worker/commits/main)
 [![GitHub Stars](https://img.shields.io/github/stars/Aethersailor/cf-ghproxy-worker?style=flat&logo=github)](https://github.com/Aethersailor/cf-ghproxy-worker/stargazers)
@@ -470,7 +470,7 @@ x-response-time: 45ms
 
 ## 📄 许可证
 
-本项目采用 [GNU General Public License v3.0](LICENSE) 许可证。
+本项目采用 [GNU Affero General Public License v3.0](LICENSE) 许可证。
 
 <br/>
 
