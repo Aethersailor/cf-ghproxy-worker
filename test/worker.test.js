@@ -7,10 +7,7 @@ import { describe, expect, it } from "vitest";
 import worker, { classifyGitRequest } from "../worker.js";
 import { network } from "./network";
 
-const PRIVATE_DISABLED = { PRIVATE_GIT_MODE: "disabled" };
-const PRIVATE_ENABLED = { PRIVATE_GIT_MODE: "passthrough" };
-
-async function invoke(request, env = PRIVATE_DISABLED) {
+async function invoke(request, env = {}) {
     const ctx = createExecutionContext();
     const response = await worker.fetch(request, env, ctx);
     await waitOnExecutionContext(ctx);
@@ -196,24 +193,7 @@ describe("Git Smart HTTP proxy", () => {
         expect(upstreamCalls).toBe(1);
     });
 
-    it("fails closed when private credential forwarding is disabled", async () => {
-        let upstreamCalled = false;
-        network.use(http.get(/https:\/\/github\.com\/.*/, () => {
-            upstreamCalled = true;
-            return new HttpResponse(null, { status: 500 });
-        }));
-
-        const response = await invoke(new Request(
-            "https://proxy.example/github.com/owner/repo.git/info/refs?service=git-upload-pack",
-            { headers: { authorization: "Basic dXNlcjp0b2tlbg==" } }
-        ));
-
-        expect(response.status).toBe(403);
-        expect(response.headers.get("cache-control")).toBe("private, no-store");
-        expect(upstreamCalled).toBe(false);
-    });
-
-    it("forwards Basic credentials only on enabled Git pull routes", async () => {
+    it("forwards Basic credentials on Git pull routes without configuration", async () => {
         const authorization = "Basic dXNlcjp0b2tlbg==";
         network.use(http.get(
             "https://github.com/owner/private.git/info/refs",
@@ -240,7 +220,7 @@ describe("Git Smart HTTP proxy", () => {
                     "git-protocol": "version=2",
                 },
             }
-        ), PRIVATE_ENABLED);
+        ));
 
         expect(response.status).toBe(200);
         expect(response.headers.get("cache-control")).toBe("private, no-store");
@@ -268,10 +248,10 @@ describe("Git Smart HTTP proxy", () => {
         const url = "https://proxy.example/github.com/owner/private.git/info/refs?service=git-upload-pack";
         const first = await invoke(new Request(url, {
             headers: { authorization: "Basic dXNlcjp0b2tlbjE=" },
-        }), PRIVATE_ENABLED);
+        }));
         const second = await invoke(new Request(url, {
             headers: { authorization: "Basic dXNlcjp0b2tlbjI=" },
-        }), PRIVATE_ENABLED);
+        }));
 
         expect(new TextDecoder().decode(await first.arrayBuffer()))
             .toBe("private-1");
@@ -293,7 +273,7 @@ describe("Git Smart HTTP proxy", () => {
         const response = await invoke(new Request(
             "https://proxy.example/github.com/owner/private.git/info/refs?service=git-upload-pack",
             { headers: { authorization: "Bearer secret" } }
-        ), PRIVATE_ENABLED);
+        ));
 
         expect(response.status).toBe(400);
         expect(upstreamCalled).toBe(false);
@@ -316,8 +296,8 @@ describe("Git Smart HTTP proxy", () => {
             "https://proxy.example/github.com/owner/private.git/info/refs?service=git-upload-pack",
             { headers: { authorization: "Basic dXNlcjpiYWQ=" } }
         );
-        const first = await invoke(request(), PRIVATE_ENABLED);
-        const second = await invoke(request(), PRIVATE_ENABLED);
+        const first = await invoke(request());
+        const second = await invoke(request());
 
         expect(first.status).toBe(404);
         expect(first.headers.get("www-authenticate")).toBe("Basic realm=GitHub");
@@ -360,7 +340,7 @@ describe("Git Smart HTTP proxy", () => {
         const response = await invoke(new Request(
             "https://proxy.example/raw.githubusercontent.com/owner/repo/main/file.txt",
             { headers: { authorization: "Basic dXNlcjp0b2tlbg==" } }
-        ), PRIVATE_ENABLED);
+        ));
 
         expect(response.status).toBe(403);
         expect(upstreamCalled).toBe(false);
@@ -385,7 +365,7 @@ describe("Git Smart HTTP proxy", () => {
         const response = await invoke(new Request(
             "https://proxy.example/github.com/owner/private.git/info/refs?service=git-upload-pack",
             { headers: { authorization: "Basic dXNlcjp0b2tlbg==" } }
-        ), PRIVATE_ENABLED);
+        ));
 
         expect(response.status).toBe(502);
         expect(redirected).toBe(false);
@@ -418,7 +398,7 @@ describe("Git Smart HTTP proxy", () => {
         const response = await invoke(new Request(
             "https://proxy.example/github.com/owner/old.git/info/refs?service=git-upload-pack",
             { headers: { authorization } }
-        ), PRIVATE_ENABLED);
+        ));
 
         expect(response.status).toBe(200);
         expect(redirectedCalls).toBe(1);

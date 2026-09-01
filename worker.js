@@ -1007,10 +1007,6 @@ export function classifyGitRequest(method, githubInfo, searchParams, headers) {
     return normalizedMethod === "POST" ? GIT_ROUTE.FORBIDDEN : GIT_ROUTE.ORDINARY;
 }
 
-function privateGitEnabled(env) {
-    return env && env.PRIVATE_GIT_MODE === "passthrough";
-}
-
 function gitProxyError(status, english, chinese, extraHeaders = {}) {
     return new Response(`${english}\n${chinese}\n`, {
         status,
@@ -1309,14 +1305,6 @@ export default {
                 403,
                 "Credentials are accepted only for read-only Git pull requests.",
                 "凭据仅可用于只读 Git 拉取请求。"
-            );
-        }
-
-        if (authorization && !privateGitEnabled(env)) {
-            return gitProxyError(
-                403,
-                "Private Git credential forwarding is disabled on this Worker.",
-                "此 Worker 未启用私有 Git 凭据转发。"
             );
         }
 

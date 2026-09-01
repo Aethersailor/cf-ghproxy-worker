@@ -278,17 +278,7 @@ Worker 支持只读 Git Smart HTTP（`clone`、`fetch`、`pull`），不支持 `
 > [!CAUTION]
 > 私有仓库功能只能用于你自己控制并信任的 Worker。PAT 会经过 Cloudflare 和 Worker；不要把凭据交给公共代理站点。
 
-1. 在 `wrangler.toml` 中显式开启凭据透传；若使用 named environment，也要在对应环境中设置：
-
-   ```toml
-   [vars]
-   PRIVATE_GIT_MODE = "passthrough"
-
-   [env.production.vars]
-   PRIVATE_GIT_MODE = "passthrough"
-   ```
-
-2. 使用只授予目标仓库 `Contents: Read-only` 的短期 fine-grained PAT。用户名写入 URL 以触发安全的交互式密码提示，密码处输入 PAT：
+无需额外配置。部署最新版 Worker 后，使用只授予目标仓库 `Contents: Read-only` 的短期 fine-grained PAT。用户名写入 URL 以触发安全的交互式密码提示，密码处输入 PAT：
 
    ```bash
    git clone https://YOUR-USERNAME@your-worker.workers.dev/github.com/OWNER/PRIVATE-REPO.git
@@ -321,14 +311,6 @@ Worker 支持只读 Git Smart HTTP（`clone`、`fetch`、`pull`），不支持 `
 | `MAX_RETRIES` | `2` | 请求失败最大重试次数 |
 | `RETRY_DELAY_MS` | `500` | 重试间隔（毫秒） |
 | `REQUEST_TIMEOUT_MS` | `30000` | 请求超时时间（毫秒） |
-
-### 私有 Git 配置
-
-| Wrangler 变量 | 默认值 | 说明 |
-|:--------------|:------:|:-----|
-| `PRIVATE_GIT_MODE` | `disabled` | 设为 `passthrough` 后，仅对 `github.com` 的只读 `git-upload-pack` 路径透传 Basic/PAT；所有认证流量禁用缓存 |
-
-<br/>
 
 ## 🔍 性能优化
 
