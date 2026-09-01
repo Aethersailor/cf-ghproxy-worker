@@ -4,25 +4,107 @@ permissions:
   contents: read
 
 on:
+  pull_request:
+    paths:
+      - 'worker.js'
+      - 'wrangler.toml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vitest.config.mjs'
+      - 'test/**'
+      - '.github/workflows/deploy.yml'
   push:
     branches:
       - main
     paths:
       - 'worker.js'
       - 'wrangler.toml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vitest.config.mjs'
+      - 'test/**'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
+    inputs:
+      target:
+        description: Deployment target
+        required: true
+        default: production
+        type: choice
+        options:
+          - production
+          - staging
+          - delete-staging
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Test and validate
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test Worker and validate deployment bundle
+        run: npm run check
+
   deploy:
+    needs: test
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && inputs.target == 'production')
     runs-on: ubuntu-latest
     name: Deploy
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Deploy to Cloudflare Workers
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: '4.127.1'
+          command: 'deploy --env=""'
+
+  deploy-staging:
+    needs: test
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'staging'
+    runs-on: ubuntu-latest
+    name: Deploy staging
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Deploy isolated staging Worker
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: '4.127.1'
+          command: 'deploy --env=staging'
+
+  delete-staging:
+    needs: test
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'delete-staging'
+    runs-on: ubuntu-latest
+    name: Delete staging
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Delete isolated staging Worker
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: '4.127.1'
+          command: 'delete github-proxy-issue3-staging --force'

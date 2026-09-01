@@ -1,0 +1,20 @@
+{
+  "name": "cf-ghproxy-worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "check": "node --check worker.js && npm test && wrangler deploy --dry-run --env=\"\" --outdir .wrangler/dry-run-production && wrangler deploy --dry-run --env=staging --outdir .wrangler/dry-run-staging"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.1.2",
+    "@msw/cloudflare": "0.0.1",
+    "msw": "2.15.0",
+    "vitest": "4.1.11",
+    "wrangler": "4.127.1"
+  }
+}

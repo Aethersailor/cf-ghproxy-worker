@@ -402,6 +402,22 @@ on:
 
 每次部署约消耗 **0.5-1 分钟**。
 
+#### Q7: 如何为自己的私有仓库启用 `git clone/pull`？
+
+私有 Git 仅适用于你自己控制并信任的 Worker。编辑 `wrangler.toml`：
+
+```toml
+[vars]
+PRIVATE_GIT_MODE = "passthrough"
+
+[env.production.vars]
+PRIVATE_GIT_MODE = "passthrough"
+```
+
+重新部署后，使用只授予目标仓库 `Contents: Read-only` 的短期 fine-grained PAT。只把用户名写进代理 URL，在 Git 的密码提示中输入 PAT；不要把 PAT 写入 URL、配置文件、脚本或日志。
+
+该功能只支持 `clone`、`fetch` 和 `pull`，不支持 push 或 Git LFS。不要通过他人运营的公共代理传递私有仓库凭据。
+
 ### 故障排查
 
 #### 错误：Authentication error (10000)
@@ -889,6 +905,22 @@ on:
 | **Private Repos (Pro)** | 3,000 minutes/month |
 
 Each deployment costs about **0.5-1 minute**.
+
+#### Q7: How do I enable `git clone/pull` for my private repository?
+
+Private Git support is intended only for a Worker deployment you control and trust. Edit `wrangler.toml`:
+
+```toml
+[vars]
+PRIVATE_GIT_MODE = "passthrough"
+
+[env.production.vars]
+PRIVATE_GIT_MODE = "passthrough"
+```
+
+After redeploying, use a short-lived fine-grained PAT restricted to `Contents: Read-only` for the target repository. Put only the username in the proxy URL and enter the PAT at Git's password prompt. Never put the PAT in a URL, configuration file, script, or log.
+
+This feature supports only `clone`, `fetch`, and `pull`; push and Git LFS remain unsupported. Never send private repository credentials through a public proxy operated by someone else.
 
 ### Troubleshooting
 

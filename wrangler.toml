@@ -2,8 +2,22 @@ name = "github-proxy"
 main = "worker.js"
 compatibility_date = "2023-12-01"
 
+[vars]
+# Private Git credentials are accepted only on trusted self-hosted deployments.
+# 私有 Git 凭据仅应在用户自己信任的部署中显式开启。
+PRIVATE_GIT_MODE = "disabled"
+
 # Worker configuration | Worker 配置
 # https://developers.cloudflare.com/workers/configuration/
 
 [env.production]
 name = "github-proxy"
+
+[env.production.vars]
+PRIVATE_GIT_MODE = "disabled"
+
+[env.staging]
+name = "github-proxy-issue3-staging"
+
+[env.staging.vars]
+PRIVATE_GIT_MODE = "passthrough"

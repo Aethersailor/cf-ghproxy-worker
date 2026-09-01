@@ -11,6 +11,14 @@ const ENABLE_EARLY_HINTS = true;      // 启用 Early Hints (HTTP 103) | Enable 
 const MAX_RETRIES = 2;                // 最大重试次数 | Max retry attempts
 const RETRY_DELAY_MS = 500;           // 重试延迟（毫秒）| Retry delay in milliseconds
 const REQUEST_TIMEOUT_MS = 30000;     // 请求超时：30 秒 | Request timeout: 30 seconds
+const MAX_GIT_REDIRECTS = 3;           // Git discovery 最大同源重定向次数 | Maximum same-origin Git discovery redirects
+
+const GIT_ROUTE = Object.freeze({
+    ORDINARY: "ordinary",
+    DISCOVERY: "git-discovery",
+    UPLOAD_PACK: "git-upload-pack",
+    FORBIDDEN: "forbidden-git-write",
+});
 
 // 支持的 GitHub 域名 | Supported GitHub domains
 const GITHUB_HOSTS = [
@@ -899,7 +907,10 @@ function parseGitHubPath(pathname) {
             const targetUrl = new URL(cleanPath);
 
             // 验证是否为支持的 GitHub 域名 | Verify if it's a supported GitHub domain
-            if (GITHUB_HOSTS.includes(targetUrl.hostname)) {
+            if (targetUrl.protocol === "https:" &&
+                !targetUrl.username &&
+                !targetUrl.password &&
+                GITHUB_HOSTS.includes(targetUrl.hostname)) {
                 return {
                     host: targetUrl.hostname,
                     path: targetUrl.pathname + targetUrl.search + targetUrl.hash,
@@ -939,6 +950,208 @@ function parseGitHubPath(pathname) {
 }
 
 /**
+ * 精确识别 Git Smart HTTP 的只读拉取路径。
+ * Classify the read-only Git Smart HTTP routes precisely.
+ *
+ * @param {string} method - HTTP method
+ * @param {Object} githubInfo - Parsed GitHub target
+ * @param {URLSearchParams} searchParams - Proxy request query
+ * @param {Headers} headers - Incoming request headers
+ * @returns {string} One of GIT_ROUTE
+ */
+export function classifyGitRequest(method, githubInfo, searchParams, headers) {
+    const normalizedMethod = String(method || "").toUpperCase();
+    if (!githubInfo || githubInfo.host !== "github.com") {
+        return normalizedMethod === "POST" ? GIT_ROUTE.FORBIDDEN : GIT_ROUTE.ORDINARY;
+    }
+
+    let targetPath;
+    try {
+        targetPath = new URL(githubInfo.fullUrl).pathname;
+    } catch {
+        return GIT_ROUTE.FORBIDDEN;
+    }
+
+    // GitHub accepts repository URLs with or without a trailing `.git`.
+    const discoveryPath = /^\/[^/?#]+\/[^/?#]+\/info\/refs$/;
+    const uploadPackPath = /^\/[^/?#]+\/[^/?#]+\/git-upload-pack$/;
+    const receivePackPath = /^\/[^/?#]+\/[^/?#]+\/git-receive-pack$/;
+    const parameters = [...searchParams.entries()];
+
+    if (discoveryPath.test(targetPath)) {
+        const uploadPackDiscovery = parameters.length === 1 &&
+            parameters[0][0] === "service" &&
+            parameters[0][1] === "git-upload-pack";
+        return normalizedMethod === "GET" && uploadPackDiscovery
+            ? GIT_ROUTE.DISCOVERY
+            : GIT_ROUTE.FORBIDDEN;
+    }
+
+    if (uploadPackPath.test(targetPath)) {
+        const contentType = (headers.get("content-type") || "")
+            .split(";", 1)[0]
+            .trim()
+            .toLowerCase();
+        return normalizedMethod === "POST" &&
+            parameters.length === 0 &&
+            contentType === "application/x-git-upload-pack-request"
+            ? GIT_ROUTE.UPLOAD_PACK
+            : GIT_ROUTE.FORBIDDEN;
+    }
+
+    if (receivePackPath.test(targetPath) ||
+        searchParams.get("service") === "git-receive-pack") {
+        return GIT_ROUTE.FORBIDDEN;
+    }
+
+    return normalizedMethod === "POST" ? GIT_ROUTE.FORBIDDEN : GIT_ROUTE.ORDINARY;
+}
+
+function privateGitEnabled(env) {
+    return env && env.PRIVATE_GIT_MODE === "passthrough";
+}
+
+function gitProxyError(status, english, chinese, extraHeaders = {}) {
+    return new Response(`${english}\n${chinese}\n`, {
+        status,
+        headers: {
+            "Content-Type": "text/plain; charset=utf-8",
+            "Cache-Control": "private, no-store",
+            "Pragma": "no-cache",
+            "X-Content-Type-Options": "nosniff",
+            ...extraHeaders,
+        },
+    });
+}
+
+function isRedirectStatus(status) {
+    return status === 301 || status === 302 || status === 303 ||
+        status === 307 || status === 308;
+}
+
+async function fetchOnce(url, options) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+        return await fetch(url, {
+            ...options,
+            signal: controller.signal,
+        });
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+async function fetchGitRequest(upstreamUrl, request, passHeaders, route) {
+    let currentUrl = new URL(upstreamUrl);
+    const method = request.method.toUpperCase();
+
+    for (let redirectCount = 0; redirectCount <= MAX_GIT_REDIRECTS; redirectCount++) {
+        let response;
+        try {
+            response = await fetchOnce(currentUrl.toString(), {
+                method,
+                headers: passHeaders,
+                body: method === "POST" ? request.body : undefined,
+                redirect: "manual",
+                cf: {
+                    cacheEverything: false,
+                    cacheTtlByStatus: { "200-599": -1 },
+                },
+            });
+        } catch (error) {
+            const detail = error instanceof Error ? error.message.toLowerCase() : "";
+            const category = detail.includes("cache")
+                ? "cache-option"
+                : (detail.includes("mock") || detail.includes("intercept")
+                    ? "request-interception"
+                    : (detail.includes("body")
+                        ? "request-body"
+                        : "fetch-error"));
+            console.error(JSON.stringify({
+                message: "git upstream fetch failed",
+                method,
+                route,
+                error: error instanceof Error ? error.name : "UnknownError",
+                category,
+            }));
+            return gitProxyError(
+                502,
+                "GitHub Git transport request failed.",
+                "GitHub Git 传输请求失败。"
+            );
+        }
+
+        if (!isRedirectStatus(response.status)) {
+            return response;
+        }
+
+        if (method === "POST") {
+            return gitProxyError(
+                502,
+                "GitHub redirected a non-replayable git-upload-pack request.",
+                "GitHub 重定向了不可重放的 git-upload-pack 请求。"
+            );
+        }
+
+        const location = response.headers.get("location");
+        if (!location || redirectCount === MAX_GIT_REDIRECTS) {
+            return gitProxyError(
+                502,
+                "GitHub Git discovery exceeded the redirect limit.",
+                "GitHub Git 发现请求超过重定向上限。"
+            );
+        }
+
+        const nextUrl = new URL(location, currentUrl);
+        const nextInfo = {
+            host: nextUrl.hostname,
+            path: nextUrl.pathname,
+            fullUrl: nextUrl.origin + nextUrl.pathname,
+        };
+        const nextRoute = classifyGitRequest(
+            "GET", nextInfo, nextUrl.searchParams, passHeaders
+        );
+        if (nextUrl.protocol !== "https:" ||
+            nextUrl.hostname !== "github.com" ||
+            nextRoute !== route) {
+            return gitProxyError(
+                502,
+                "GitHub Git discovery attempted an unsafe redirect.",
+                "GitHub Git 发现请求尝试了不安全的重定向。"
+            );
+        }
+        currentUrl = nextUrl;
+    }
+
+    return gitProxyError(
+        502,
+        "GitHub Git discovery failed.",
+        "GitHub Git 发现请求失败。"
+    );
+}
+
+function gitResponseHeaders(upstreamResponse, authenticated) {
+    const headers = new Headers(upstreamResponse.headers);
+    for (const name of [
+        "age",
+        "cdn-cache-control",
+        "cloudflare-cdn-cache-control",
+        "expires",
+        "set-cookie",
+        "x-github-target",
+    ]) {
+        headers.delete(name);
+    }
+    headers.set("Cache-Control", authenticated ? "private, no-store" : "no-store");
+    headers.set("Pragma", "no-cache");
+    headers.set("X-Cache-Status", "BYPASS");
+    headers.set("X-Cache-Strategy", "git-smart");
+    headers.set("X-Content-Type-Options", "nosniff");
+    return headers;
+}
+
+/**
  * 带重试逻辑和超时控制的智能请求函数
  * Fetch with retry logic and timeout control
  * 
@@ -953,15 +1166,7 @@ function parseGitHubPath(pathname) {
 async function fetchWithRetry(url, options, retries = MAX_RETRIES) {
     for (let i = 0; i <= retries; i++) {
         try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-            const response = await fetch(url, {
-                ...options,
-                signal: controller.signal
-            });
-
-            clearTimeout(timeoutId);
+            const response = await fetchOnce(url, options);
 
             // 成功或客户端错误（4xx）时不重试 | Don't retry on success or client errors (4xx)
             if (response.ok || (response.status >= 400 && response.status < 500)) {
@@ -1043,6 +1248,13 @@ export default {
         // 解析并验证 GitHub 路径 | Parse and validate GitHub path
         const githubInfo = parseGitHubPath(url.pathname);
         if (!githubInfo) {
+            if (url.pathname !== "/") {
+                return gitProxyError(
+                    400,
+                    "Invalid or unsafe GitHub target URL.",
+                    "GitHub 目标 URL 无效或不安全。"
+                );
+            }
             // 显示首页 | Show homepage
             const currentDomain = url.origin; // 获取当前访问域名
             return new Response(getHomePage(currentDomain), {
@@ -1067,9 +1279,54 @@ export default {
             });
         }
 
-        // 仅允许 GET 和 HEAD 方法 | Only allow GET and HEAD methods
-        if (request.method !== "GET" && request.method !== "HEAD") {
-            return new Response("Method Not Allowed", { status: 405 });
+        const gitRoute = classifyGitRequest(
+            request.method, githubInfo, url.searchParams, request.headers
+        );
+        const gitSmart = gitRoute === GIT_ROUTE.DISCOVERY ||
+            gitRoute === GIT_ROUTE.UPLOAD_PACK;
+        const authorization = request.headers.get("authorization");
+
+        if (gitRoute === GIT_ROUTE.FORBIDDEN) {
+            return gitProxyError(
+                405,
+                "Only read-only git-upload-pack requests are supported.",
+                "仅支持只读 git-upload-pack 拉取请求。",
+                { "Allow": "GET, HEAD, OPTIONS, POST" }
+            );
+        }
+
+        if (request.method !== "GET" && request.method !== "HEAD" && !gitSmart) {
+            return gitProxyError(
+                405,
+                "Method Not Allowed.",
+                "不允许使用此请求方法。",
+                { "Allow": "GET, HEAD, OPTIONS, POST" }
+            );
+        }
+
+        if (authorization && !gitSmart) {
+            return gitProxyError(
+                403,
+                "Credentials are accepted only for read-only Git pull requests.",
+                "凭据仅可用于只读 Git 拉取请求。"
+            );
+        }
+
+        if (authorization && !privateGitEnabled(env)) {
+            return gitProxyError(
+                403,
+                "Private Git credential forwarding is disabled on this Worker.",
+                "此 Worker 未启用私有 Git 凭据转发。"
+            );
+        }
+
+        if (authorization &&
+            !/^Basic [A-Za-z0-9+/]+={0,2}$/i.test(authorization)) {
+            return gitProxyError(
+                400,
+                "Private Git pull requires HTTP Basic authentication.",
+                "私有 Git 拉取需要使用 HTTP Basic 认证。"
+            );
         }
 
         const startTime = Date.now();
@@ -1080,14 +1337,19 @@ export default {
         // 获取客户端支持的编码 | Get client's supported encodings
         const acceptEncoding = request.headers.get("accept-encoding") || "";
 
-        // 生成用于查询的缓存键 | Generate cache key for lookup
-        const initialCacheKey = getOptimalCacheKey(request.url, acceptEncoding);
-        const cacheKey = new Request(initialCacheKey, { method: "GET" });
+        // Git Smart HTTP and credential-bearing requests must never use a
+        // shared cache key. Ordinary downloads preserve the existing cache.
+        const initialCacheKey = gitSmart
+            ? null
+            : getOptimalCacheKey(request.url, acceptEncoding);
+        const cacheKey = initialCacheKey
+            ? new Request(initialCacheKey, { method: "GET" })
+            : null;
 
         const upstreamUrl = githubInfo.fullUrl + url.search;
 
         // 向浏览器发送 Early Hints (HTTP 103) | Send Early Hints to browser (HTTP 103)
-        if (ENABLE_EARLY_HINTS && request.method === "GET") {
+        if (ENABLE_EARLY_HINTS && request.method === "GET" && !gitSmart) {
             ctx.waitUntil(
                 (async () => {
                     try {
@@ -1109,7 +1371,7 @@ export default {
 
         // 仅缓存完整的 GET 请求（不包括 Range 请求）| Only cache complete GET requests (not Range requests)
         const isRange = !!request.headers.get("range");
-        if (request.method === "GET" && !isRange) {
+        if (request.method === "GET" && !isRange && !gitSmart && cacheKey) {
             const hit = await cache.match(cacheKey);
             if (hit) {
                 // 返回缓存响应并更新头部 | Return cached response with updated headers
@@ -1139,36 +1401,58 @@ export default {
             if (v) passHeaders.set(h, v);
         }
 
+        if (gitSmart) {
+            for (const h of ["git-protocol", "content-type"]) {
+                const v = request.headers.get(h);
+                if (v) passHeaders.set(h, v);
+            }
+            if (authorization) {
+                passHeaders.set("authorization", authorization);
+            }
+        }
+
         // 使用重试逻辑从上游获取 | Fetch from upstream with retry logic
-        const upstreamResp = await fetchWithRetry(upstreamUrl, {
-            method: request.method,
-            headers: passHeaders,
-            redirect: "follow",
-            cf: {
-                // Cloudflare 特定优化 | Cloudflare-specific optimizations
-                cacheEverything: true,
-                cacheTtl: cacheStrategy.edgeTTL,
-                cacheTtlByStatus: {
-                    "200-299": cacheStrategy.edgeTTL,
-                    "404": 60,
-                    "500-599": 0
+        const upstreamResp = gitSmart
+            ? await fetchGitRequest(
+                upstreamUrl, request, passHeaders, gitRoute
+            )
+            : await fetchWithRetry(upstreamUrl, {
+                method: request.method,
+                headers: passHeaders,
+                redirect: "follow",
+                cf: {
+                    // Cloudflare 特定优化 | Cloudflare-specific optimizations
+                    cacheEverything: true,
+                    cacheTtl: cacheStrategy.edgeTTL,
+                    cacheTtlByStatus: {
+                        "200-299": cacheStrategy.edgeTTL,
+                        "404": 60,
+                        "500-599": 0
+                    },
+
+                    // 图片优化 | Image optimization
+                    polish: "lossy",
+                    mirage: true,
+
+                    // 代码压缩 | Minification
+                    minify: {
+                        javascript: true,
+                        css: true,
+                        html: true
+                    },
+
+                    // 使用 Cloudflare DNS (1.1.1.1) | Use Cloudflare DNS (1.1.1.1)
+                    resolveOverride: "1.1.1.1"
                 },
+            });
 
-                // 图片优化 | Image optimization
-                polish: "lossy",
-                mirage: true,
-
-                // 代码压缩 | Minification
-                minify: {
-                    javascript: true,
-                    css: true,
-                    html: true
-                },
-
-                // 使用 Cloudflare DNS (1.1.1.1) | Use Cloudflare DNS (1.1.1.1)
-                resolveOverride: "1.1.1.1"
-            },
-        });
+        if (gitSmart) {
+            return new Response(upstreamResp.body, {
+                status: upstreamResp.status,
+                statusText: upstreamResp.statusText,
+                headers: gitResponseHeaders(upstreamResp, Boolean(authorization)),
+            });
+        }
 
         const respHeaders = new Headers(upstreamResp.headers);
 
