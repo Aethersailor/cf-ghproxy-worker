@@ -15,3 +15,9 @@ name = "github-proxy"
 
 [env.production.vars]
 PRIVATE_GIT_MODE = "disabled"
+
+[env.staging]
+name = "github-proxy-issue3-staging"
+
+[env.staging.vars]
+PRIVATE_GIT_MODE = "passthrough"

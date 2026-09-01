@@ -8,7 +8,7 @@
   },
   "scripts": {
     "test": "vitest run",
-    "check": "node --check worker.js && npm test && wrangler deploy --dry-run --env=\"\" --outdir .wrangler/dry-run"
+    "check": "node --check worker.js && npm test && wrangler deploy --dry-run --env=\"\" --outdir .wrangler/dry-run-production && wrangler deploy --dry-run --env=staging --outdir .wrangler/dry-run-staging"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.1.2",
