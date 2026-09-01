@@ -278,17 +278,7 @@ The Worker supports read-only Git Smart HTTP (`clone`, `fetch`, and `pull`). It 
 > [!CAUTION]
 > Use private repository support only on a Worker deployment you control and trust. The PAT passes through Cloudflare and the Worker; never give credentials to a public proxy service.
 
-1. Explicitly enable credential pass-through in `wrangler.toml`. Named environments must declare the variable independently:
-
-   ```toml
-   [vars]
-   PRIVATE_GIT_MODE = "passthrough"
-
-   [env.production.vars]
-   PRIVATE_GIT_MODE = "passthrough"
-   ```
-
-2. Use a short-lived fine-grained PAT restricted to `Contents: Read-only` for the target repository. Put only the username in the URL to trigger an interactive password prompt, then enter the PAT as the password:
+No extra configuration is required. After deploying the latest Worker, use a short-lived fine-grained PAT restricted to `Contents: Read-only` for the target repository. Put only the username in the URL to trigger an interactive password prompt, then enter the PAT as the password:
 
    ```bash
    git clone https://YOUR-USERNAME@your-worker.workers.dev/github.com/OWNER/PRIVATE-REPO.git
@@ -321,14 +311,6 @@ Customize the following parameters in `worker.js`:
 | `MAX_RETRIES` | `2` | Maximum retry attempts |
 | `RETRY_DELAY_MS` | `500` | Retry interval (milliseconds) |
 | `REQUEST_TIMEOUT_MS` | `30000` | Request timeout (milliseconds) |
-
-### Private Git Configuration
-
-| Wrangler Variable | Default | Description |
-|:------------------|:-------:|:------------|
-| `PRIVATE_GIT_MODE` | `disabled` | Set to `passthrough` to forward Basic/PAT only to read-only `git-upload-pack` routes on `github.com`; all authenticated traffic bypasses caches |
-
-<br/>
 
 ## 🔍 Performance Optimization
 
