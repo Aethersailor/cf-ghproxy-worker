@@ -3,9 +3,37 @@ updates:
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "cron"
+      cronjob: "17 3 * * *"
+      timezone: "Asia/Shanghai"
+    rebase-strategy: "auto"
+    open-pull-requests-limit: 20
+    labels:
+      - "dependencies"
+      - "automerge"
+    groups:
+      vitest-stack:
+        patterns:
+          - "vitest"
+          - "@cloudflare/vitest-plugin"
+      worker-tooling:
+        patterns:
+          - "wrangler"
+          - "msw"
+          - "@msw/cloudflare"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "cron"
+      cronjob: "47 3 * * *"
+      timezone: "Asia/Shanghai"
+    rebase-strategy: "auto"
+    open-pull-requests-limit: 20
+    labels:
+      - "dependencies"
+      - "automerge"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
