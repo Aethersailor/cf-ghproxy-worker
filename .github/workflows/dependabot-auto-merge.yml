@@ -157,6 +157,10 @@ jobs:
             head_repo=$(jq -r '.head.repo.full_name // ""' <<<"$pull")
             head_sha=$(jq -r '.head.sha' <<<"$pull")
             title=$(jq -r '.title' <<<"$pull")
+            commit_title="$title"
+            if [[ ! "$commit_title" =~ \(\#[0-9]+\)$ ]]; then
+              commit_title="$commit_title (#$pull_number)"
+            fi
 
             [[ $(jq -r '.state' <<<"$pull") == "open" ]] || continue
             [[ $(jq -r '.draft' <<<"$pull") == "false" ]] || continue
@@ -278,7 +282,7 @@ jobs:
               "repos/$REPOSITORY/pulls/$pull_number/merge" \
               -f merge_method=squash \
               -f sha="$head_sha" \
-              -f commit_title="$title")
+              -f commit_title="$commit_title")
             jq -e '.merged == true' <<<"$merge_result" >/dev/null
             merge_sha=$(jq -r '.sha' <<<"$merge_result")
             remove_label "$pull_number" dependabot-blocked
