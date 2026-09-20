@@ -11,10 +11,10 @@
     "check": "node --check worker.js && npm test && wrangler deploy --dry-run --env=\"\" --outdir .wrangler/dry-run-production && wrangler deploy --dry-run --env=staging --outdir .wrangler/dry-run-staging"
   },
   "devDependencies": {
-    "@cloudflare/vitest-plugin": "1.1.7",
+    "@cloudflare/vitest-plugin": "1.1.12",
     "@msw/cloudflare": "0.0.1",
     "msw": "2.15.0",
-    "vitest": "4.1.11",
+    "vitest": "5.0.1",
     "wrangler": "4.134.0"
   }
 }
