@@ -15,6 +15,6 @@
     "@msw/cloudflare": "0.0.1",
     "msw": "2.15.0",
     "vitest": "4.1.11",
-    "wrangler": "4.132.0"
+    "wrangler": "4.134.0"
   }
 }
