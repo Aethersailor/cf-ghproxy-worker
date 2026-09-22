@@ -16,11 +16,23 @@ updates:
         patterns:
           - "vitest"
           - "@cloudflare/vitest-plugin"
+        update-types:
+          - "minor"
+          - "patch"
       worker-tooling:
         patterns:
           - "wrangler"
           - "msw"
           - "@msw/cloudflare"
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # @cloudflare/vitest-plugin 1.x currently declares vitest ^4.1.0.
+      # Do not let a grouped major update recreate an uninstallable main.
+      - dependency-name: "vitest"
+        update-types:
+          - "version-update:semver-major"
 
   - package-ecosystem: "github-actions"
     directory: "/"

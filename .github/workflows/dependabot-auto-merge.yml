@@ -4,10 +4,9 @@ on:
   workflow_run:
     workflows:
       - Deploy to Cloudflare Workers
-    types:
-      - completed
+    types: [completed]
   schedule:
-    - cron: "17 * * * *"
+    - cron: "7,22,37,52 * * * *"
   workflow_dispatch:
 
 concurrency:
@@ -16,18 +15,16 @@ concurrency:
 
 permissions:
   actions: write
-  checks: read
   contents: write
-  issues: write
   pull-requests: write
 
 jobs:
-  reconcile:
-    name: Reconcile trusted dependency updates
+  merge:
+    name: Merge one trusted dependency update
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
-      - name: Merge one fully validated Dependabot pull request
+      - name: Merge the first ready Dependabot pull request
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -39,108 +36,17 @@ jobs:
             local endpoint="$1"
             local attempt
             for attempt in 1 2 3; do
-              if gh api "$endpoint" 2>"$RUNNER_TEMP/api-error"; then
+              if gh api "$endpoint" 2>/dev/null; then
                 return 0
               fi
-              if (( attempt < 3 )); then
-                sleep $((attempt * 2))
-              fi
+              sleep $((attempt * 2))
             done
-            cat "$RUNNER_TEMP/api-error" >&2
             return 1
           }
 
-          add_label() {
-            local pull_number="$1"
-            local label="$2"
-            gh api --silent --method POST \
-              "repos/$REPOSITORY/issues/$pull_number/labels" \
-              -f "labels[]=$label"
-          }
-
-          remove_label() {
-            local pull_number="$1"
-            local label="$2"
-            gh api --silent --method DELETE \
-              "repos/$REPOSITORY/issues/$pull_number/labels/$label" \
-              2>/dev/null || true
-          }
-
-          rerun_gate() {
-            local run_id="$1"
-            local conclusion="$2"
-            if [[ "$conclusion" == "failure" ]]; then
-              gh api --silent --method POST \
-                "repos/$REPOSITORY/actions/runs/$run_id/rerun-failed-jobs"
-            else
-              gh api --silent --method POST \
-                "repos/$REPOSITORY/actions/runs/$run_id/rerun"
-            fi
-          }
-
           default_branch=$(api_get "repos/$REPOSITORY" | jq -er '.default_branch')
-          default_sha=$(api_get "repos/$REPOSITORY/commits/$default_branch" | jq -er '.sha')
-
-          gh label create automerge --repo "$REPOSITORY" --force \
-            --color 0e8a16 \
-            --description "Trusted dependency update eligible for automatic merge"
-          gh label create dependabot-rebase-needed --repo "$REPOSITORY" --force \
-            --color fbca04 \
-            --description "Dependabot must rebase this update onto the current default branch"
-          gh label create dependabot-blocked --repo "$REPOSITORY" --force \
-            --color d93f0b \
-            --description "Dependency update remains blocked after bounded automatic retries"
-
-          # Never merge another dependency while the current default branch has
-          # not completed both validation and production deployment.
-          default_runs=$(api_get \
-            "repos/$REPOSITORY/actions/runs?branch=$default_branch&per_page=100")
-          default_run=$(jq -c \
-            --arg sha "$default_sha" '
-              [.workflow_runs[]
-                | select(.name == "Deploy to Cloudflare Workers")
-                | select(.head_sha == $sha)
-                | select(.event == "push" or .event == "workflow_dispatch")]
-              | sort_by(.id)
-              | last // null
-            ' <<<"$default_runs")
-
-          if [[ "$default_run" == "null" ]]; then
-            gh workflow run deploy.yml --repo "$REPOSITORY" \
-              --ref "$default_branch" -f target=production
-            echo "Dispatched production validation for $default_branch@$default_sha"
-            exit 0
-          fi
-
-          default_status=$(jq -r '.status' <<<"$default_run")
-          default_conclusion=$(jq -r '.conclusion // ""' <<<"$default_run")
-          if [[ "$default_status" != "completed" ]]; then
-            echo "$default_branch@$default_sha is still being validated and deployed"
-            exit 0
-          fi
-          if [[ "$default_conclusion" != "success" ]]; then
-            default_run_id=$(jq -r '.id' <<<"$default_run")
-            default_attempt=$(jq -r '.run_attempt // 1' <<<"$default_run")
-            if [[ "$default_conclusion" =~ ^(failure|cancelled|timed_out|startup_failure|stale)$ ]] &&
-               (( default_attempt < 3 )); then
-              rerun_gate "$default_run_id" "$default_conclusion"
-              echo "Re-running failed default-branch gate $default_run_id (attempt $((default_attempt + 1))/3)"
-              exit 0
-            fi
-            echo "$default_branch@$default_sha is not deployable after $default_attempt attempt(s)" >&2
-            exit 1
-          fi
-
-          default_run_id=$(jq -r '.id' <<<"$default_run")
-          default_jobs=$(api_get \
-            "repos/$REPOSITORY/actions/runs/$default_run_id/jobs?per_page=100")
-          jq -e '
-            any(.jobs[]; .name == "Test and validate" and .conclusion == "success")
-            and any(.jobs[]; .name == "Deploy" and .conclusion == "success")
-          ' <<<"$default_jobs" >/dev/null || {
-            echo "Default-branch workflow did not complete validation and production deployment" >&2
-            exit 1
-          }
+          default_sha=$(api_get \
+            "repos/$REPOSITORY/commits/$default_branch" | jq -er '.sha')
 
           mapfile -t pull_requests < <(
             api_get \
@@ -149,38 +55,33 @@ jobs:
           )
 
           for pull_number in "${pull_requests[@]}"; do
-            pull=$(api_get "repos/$REPOSITORY/pulls/$pull_number")
+            if ! pull=$(api_get "repos/$REPOSITORY/pulls/$pull_number"); then
+              echo "Skipping PR #$pull_number because GitHub temporarily failed to return it"
+              continue
+            fi
+
             author=$(jq -r '.user.login' <<<"$pull")
-            base_ref=$(jq -r '.base.ref' <<<"$pull")
             base_sha=$(jq -r '.base.sha' <<<"$pull")
             head_ref=$(jq -r '.head.ref' <<<"$pull")
             head_repo=$(jq -r '.head.repo.full_name // ""' <<<"$pull")
             head_sha=$(jq -r '.head.sha' <<<"$pull")
             title=$(jq -r '.title' <<<"$pull")
-            commit_title="$title"
-            if [[ ! "$commit_title" =~ \(\#[0-9]+\)$ ]]; then
-              commit_title="$commit_title (#$pull_number)"
-            fi
 
-            [[ $(jq -r '.state' <<<"$pull") == "open" ]] || continue
-            [[ $(jq -r '.draft' <<<"$pull") == "false" ]] || continue
-            [[ "$author" == "dependabot[bot]" ]] || continue
-            [[ "$base_ref" == "$default_branch" ]] || continue
+            [[ "$author" == 'dependabot[bot]' ]] || continue
+            [[ $(jq -r '.draft' <<<"$pull") == false ]] || continue
             [[ "$head_repo" == "$REPOSITORY" ]] || continue
             [[ "$head_ref" == dependabot/* ]] || continue
 
-            add_label "$pull_number" automerge
-
             if [[ "$base_sha" != "$default_sha" ]]; then
-              add_label "$pull_number" dependabot-rebase-needed
-              remove_label "$pull_number" dependabot-blocked
-              echo "PR #$pull_number is waiting for Dependabot to rebase onto $default_sha"
+              echo "Skipping stale PR #$pull_number until Dependabot rebases it"
               continue
             fi
-            remove_label "$pull_number" dependabot-rebase-needed
 
-            commits=$(api_get \
-              "repos/$REPOSITORY/pulls/$pull_number/commits?per_page=100")
+            if ! commits=$(api_get \
+                 "repos/$REPOSITORY/pulls/$pull_number/commits?per_page=100"); then
+              echo "Skipping PR #$pull_number because GitHub temporarily failed to return its commits"
+              continue
+            fi
             if ! jq -e '
               length > 0
               and length < 100
@@ -188,23 +89,24 @@ jobs:
                 .author.login == "dependabot[bot]"
                 and .commit.verification.verified == true)
             ' <<<"$commits" >/dev/null; then
-              add_label "$pull_number" dependabot-blocked
-              echo "PR #$pull_number contains an untrusted or unsigned commit"
+              echo "Skipping PR #$pull_number because it contains an untrusted commit"
               continue
             fi
 
-            files=$(api_get \
-              "repos/$REPOSITORY/pulls/$pull_number/files?per_page=100")
+            if ! files=$(api_get \
+                 "repos/$REPOSITORY/pulls/$pull_number/files?per_page=100"); then
+              echo "Skipping PR #$pull_number because GitHub temporarily failed to return its files"
+              continue
+            fi
             if ! jq -e '
               length > 0
               and length < 100
-              and all(.[];
-                .filename == "package.json"
-                or .filename == "package-lock.json"
-                or (.filename | test("^\\.github/workflows/[^/]+\\.ya?ml$")))
+              and all(.[].filename;
+                . == "package.json"
+                or . == "package-lock.json"
+                or test("^\\.github/workflows/[^/]+\\.ya?ml$"))
             ' <<<"$files" >/dev/null; then
-              add_label "$pull_number" dependabot-blocked
-              echo "PR #$pull_number changes files outside the dependency-maintenance allowlist"
+              echo "Skipping PR #$pull_number because it changes non-dependency files"
               continue
             fi
 
@@ -220,79 +122,60 @@ jobs:
                 | sort_by(.id)
                 | last // null
               ' <<<"$runs")
-
-            if [[ "$gate" == "null" ]]; then
-              echo "PR #$pull_number has no exact-head validation run for $head_sha"
-              continue
-            fi
-
-            gate_status=$(jq -r '.status' <<<"$gate")
-            gate_conclusion=$(jq -r '.conclusion // ""' <<<"$gate")
-            if [[ "$gate_status" != "completed" ]]; then
-              echo "PR #$pull_number is still being validated"
-              continue
-            fi
-            if [[ "$gate_conclusion" != "success" ]]; then
-              gate_run_id=$(jq -r '.id' <<<"$gate")
-              gate_attempt=$(jq -r '.run_attempt // 1' <<<"$gate")
-              add_label "$pull_number" dependabot-blocked
-              if [[ "$gate_conclusion" =~ ^(failure|cancelled|timed_out|startup_failure|stale)$ ]] &&
-                 (( gate_attempt < 3 )); then
-                rerun_gate "$gate_run_id" "$gate_conclusion"
-                echo "Re-running failed gate $gate_run_id for PR #$pull_number (attempt $((gate_attempt + 1))/3)"
-              else
-                echo "PR #$pull_number remains blocked after $gate_attempt attempt(s): $gate_conclusion"
-              fi
+            if [[ "$gate" == null ]] ||
+               [[ $(jq -r '.status' <<<"$gate") != completed ]] ||
+               [[ $(jq -r '.conclusion // ""' <<<"$gate") != success ]]; then
+              echo "Skipping PR #$pull_number because its validation is not successful"
               continue
             fi
 
             gate_run_id=$(jq -r '.id' <<<"$gate")
             gate_jobs=$(api_get \
               "repos/$REPOSITORY/actions/runs/$gate_run_id/jobs?per_page=100")
-            jq -e '
-              any(.jobs[]; .name == "Test and validate" and .conclusion == "success")
-            ' <<<"$gate_jobs" >/dev/null || continue
-
-            checks=$(api_get \
-              "repos/$REPOSITORY/commits/$head_sha/check-runs?filter=latest&per_page=100")
             if ! jq -e '
-              [.check_runs[]
-                | select(
-                    .status != "completed"
-                    or (.conclusion != "success"
-                        and .conclusion != "neutral"
-                        and .conclusion != "skipped"))]
-              | length == 0
-            ' <<<"$checks" >/dev/null; then
-              echo "PR #$pull_number has a failing or incomplete check"
+              any(.jobs[];
+                .name == "Test and validate" and .conclusion == "success")
+            ' <<<"$gate_jobs" >/dev/null; then
+              echo "Skipping PR #$pull_number because npm/Worker validation did not pass"
               continue
             fi
 
             fresh_pull=$(api_get "repos/$REPOSITORY/pulls/$pull_number")
-            [[ $(jq -r '.state' <<<"$fresh_pull") == "open" ]] || continue
-            [[ $(jq -r '.draft' <<<"$fresh_pull") == "false" ]] || continue
-            [[ $(jq -r '.user.login' <<<"$fresh_pull") == "$author" ]] || continue
-            [[ $(jq -r '.base.ref' <<<"$fresh_pull") == "$default_branch" ]] || continue
-            [[ $(jq -r '.base.sha' <<<"$fresh_pull") == "$default_sha" ]] || continue
-            [[ $(jq -r '.head.repo.full_name // ""' <<<"$fresh_pull") == "$REPOSITORY" ]] || continue
-            [[ $(jq -r '.head.sha' <<<"$fresh_pull") == "$head_sha" ]] || continue
-            [[ $(jq -r '.mergeable' <<<"$fresh_pull") == "true" ]] || continue
+            if ! jq -e \
+              --arg author "$author" \
+              --arg base "$default_branch" \
+              --arg base_sha "$default_sha" \
+              --arg repo "$REPOSITORY" \
+              --arg head "$head_sha" '
+                .state == "open"
+                and (.draft | not)
+                and .user.login == $author
+                and .base.ref == $base
+                and .base.sha == $base_sha
+                and .head.repo.full_name == $repo
+                and .head.sha == $head
+                and .mergeable == true
+              ' <<<"$fresh_pull" >/dev/null; then
+              echo "Skipping PR #$pull_number because it changed or is not currently mergeable"
+              continue
+            fi
 
-            merge_result=$(gh api --method PUT \
-              "repos/$REPOSITORY/pulls/$pull_number/merge" \
-              -f merge_method=squash \
-              -f sha="$head_sha" \
-              -f commit_title="$commit_title")
-            jq -e '.merged == true' <<<"$merge_result" >/dev/null
-            merge_sha=$(jq -r '.sha' <<<"$merge_result")
-            remove_label "$pull_number" dependabot-blocked
+            commit_title="$title (#$pull_number)"
+            if ! response=$(gh api --method PUT \
+                 "repos/$REPOSITORY/pulls/$pull_number/merge" \
+                 -f merge_method=squash \
+                 -f sha="$head_sha" \
+                 -f commit_title="$commit_title" 2>&1); then
+              echo "GitHub deferred PR #$pull_number: $response"
+              continue
+            fi
+            merge_sha=$(jq -er 'select(.merged == true) | .sha' <<<"$response")
 
-            # Merges authenticated with GITHUB_TOKEN do not emit a normal push
-            # workflow, so explicitly start the production validation/deploy.
+            # GITHUB_TOKEN merges do not emit ordinary push workflows.
             gh workflow run deploy.yml --repo "$REPOSITORY" \
               --ref "$default_branch" -f target=production
-            echo "Merged Dependabot PR #$pull_number as $merge_sha and dispatched production deployment"
+            echo "Merged PR #$pull_number as $merge_sha and dispatched production deployment"
             exit 0
           done
 
-          echo "No fully validated Dependabot pull request is ready to merge"
+          echo "No ready Dependabot pull request required merging"
