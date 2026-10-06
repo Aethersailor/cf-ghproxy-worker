@@ -12,9 +12,9 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.3.6",
-    "@msw/cloudflare": "0.1.0",
+    "@msw/cloudflare": "0.2.0",
     "msw": "2.15.0",
     "vitest": "4.1.11",
-    "wrangler": "4.142.0"
+    "wrangler": "4.147.0"
   }
 }
