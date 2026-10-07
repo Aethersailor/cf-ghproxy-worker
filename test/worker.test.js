@@ -7,12 +7,47 @@ import { describe, expect, it } from "vitest";
 import worker, { classifyGitRequest } from "../worker.js";
 import { network } from "./network";
 
-async function invoke(request, env = {}) {
+async function invoke(request, env = { REQUEST_LIMITER: { limit: async () => ({ success: true }) } }) {
     const ctx = createExecutionContext();
     const response = await worker.fetch(request, env, ctx);
     await waitOnExecutionContext(ctx);
     return response;
 }
+
+describe("request protection", () => {
+    it("downloads without issuing a request to its own URL", async () => {
+        const url = "https://proxy.example/raw.githubusercontent.com/owner/repo/main/no-self-fetch.txt";
+        let selfRequests = 0;
+        network.use(
+            http.get("https://raw.githubusercontent.com/owner/repo/main/no-self-fetch.txt", () => HttpResponse.text("download")),
+            http.head(url, () => { selfRequests++; return new HttpResponse(null); })
+        );
+        const response = await invoke(new Request(url));
+        expect(response.status).toBe(200);
+        expect(await response.text()).toBe("download");
+        expect(selfRequests).toBe(0);
+    });
+
+    it("rejects proxy traffic when the binding is missing", async () => {
+        const response = await invoke(new Request("https://proxy.example/raw.githubusercontent.com/owner/repo/main/test.txt"), {});
+        expect(response.status).toBe(503);
+    });
+
+    it("rejects proxy traffic when the limiter fails", async () => {
+        const response = await invoke(new Request("https://proxy.example/raw.githubusercontent.com/owner/repo/main/test.txt"), {
+            REQUEST_LIMITER: { limit: async () => { throw new Error("unavailable"); } },
+        });
+        expect(response.status).toBe(503);
+    });
+
+    it("returns 429 when the request allowance is exhausted", async () => {
+        const response = await invoke(new Request("https://proxy.example/raw.githubusercontent.com/owner/repo/main/test.txt"), {
+            REQUEST_LIMITER: { limit: async () => ({ success: false }) },
+        });
+        expect(response.status).toBe(429);
+        expect(response.headers.get("Retry-After")).toBe("60");
+    });
+});
 
 function gitInfo(path = "owner/repo.git") {
     return {

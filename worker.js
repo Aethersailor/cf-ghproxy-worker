@@ -7,7 +7,6 @@ const BROWSER_CACHE_SECONDS = 3600;  // 浏览器缓存：1 小时 | Browser cac
 
 // 性能优化配置 | Performance optimization settings
 const ENABLE_COMPRESSION = true;      // 启用 Brotli/Gzip 压缩 | Enable Brotli/Gzip compression
-const ENABLE_EARLY_HINTS = true;      // 启用 Early Hints (HTTP 103) | Enable Early Hints (HTTP 103)
 const MAX_RETRIES = 2;                // 最大重试次数 | Max retry attempts
 const RETRY_DELAY_MS = 500;           // 重试延迟（毫秒）| Retry delay in milliseconds
 const REQUEST_TIMEOUT_MS = 30000;     // 请求超时：30 秒 | Request timeout: 30 seconds
@@ -1317,6 +1316,23 @@ export default {
             );
         }
 
+        // Reject requests before upstream work when protection is unavailable.
+        if (!env.REQUEST_LIMITER || typeof env.REQUEST_LIMITER.limit !== "function") {
+            return gitProxyError(503, "Request protection is unavailable.", "请求保护暂不可用。",
+                { "Retry-After": "60" });
+        }
+        try {
+            const ip = request.headers.get("cf-connecting-ip") || "unknown";
+            const { success } = await env.REQUEST_LIMITER.limit({ key: `proxy:${ip}` });
+            if (!success) {
+                return gitProxyError(429, "Too many requests.", "请求过于频繁。",
+                    { "Retry-After": "60" });
+            }
+        } catch {
+            return gitProxyError(503, "Request protection is unavailable.", "请求保护暂不可用。",
+                { "Retry-After": "60" });
+        }
+
         const startTime = Date.now();
 
         // 根据路径确定缓存策略 | Determine cache strategy based on path
@@ -1335,24 +1351,6 @@ export default {
             : null;
 
         const upstreamUrl = githubInfo.fullUrl + url.search;
-
-        // 向浏览器发送 Early Hints (HTTP 103) | Send Early Hints to browser (HTTP 103)
-        if (ENABLE_EARLY_HINTS && request.method === "GET" && !gitSmart) {
-            ctx.waitUntil(
-                (async () => {
-                    try {
-                        await fetch(request.url, {
-                            method: "HEAD",
-                            headers: {
-                                "Link": `<${upstreamUrl}>; rel=preconnect`,
-                            }
-                        });
-                    } catch (e) {
-                        // Early Hints 失败不影响主流程 | Early Hints failure doesn't affect main flow
-                    }
-                })()
-            );
-        }
 
         // 检查边缘缓存（Cloudflare 默认缓存）| Check edge cache (Cloudflare's default cache)
         const cache = caches.default;

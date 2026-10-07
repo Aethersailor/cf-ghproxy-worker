@@ -307,10 +307,19 @@ Worker 支持只读 Git Smart HTTP（`clone`、`fetch`、`pull`），不支持 `
 | 参数 | 默认值 | 说明 |
 |:-----|:------:|:-----|
 | `ENABLE_COMPRESSION` | `true` | 启用 Brotli/Gzip 压缩 |
-| `ENABLE_EARLY_HINTS` | `true` | 启用 Early Hints (HTTP 103) |
 | `MAX_RETRIES` | `2` | 请求失败最大重试次数 |
 | `RETRY_DELAY_MS` | `500` | 重试间隔（毫秒） |
 | `REQUEST_TIMEOUT_MS` | `30000` | 请求超时时间（毫秒） |
+
+### 请求保护与费用边界
+
+代理请求需要绑定 Cloudflare Rate Limiting API，绑定名为 `REQUEST_LIMITER`。Wrangler 配置默认限制同一 IP 在单个 Cloudflare 节点每分钟最多 120 次代理请求，生产和测试环境使用独立计数器。控制台手动部署时，也必须添加这个绑定。绑定缺失或限流服务出错时，代理返回 `503`；超过限额时返回 `429`，并附带 `Retry-After: 60`。首页和无效请求不调用上游。
+
+限流用于降低滥用风险，其计数在 Cloudflare 节点内执行，不能作为全账户费用上限。需要阻止 Workers 超额计费时，应保留 Workers Free 套餐；付费套餐超过包含额度后会继续计费。预算告警只发送通知，不会停止用量。GitHub 下载缓存命中也会计入 Worker 请求数。
+
+普通下载最多重试 2 次。Worker 不再为每次下载额外向自身发起 HEAD 请求。
+
+Wrangler 配置禁用版本预览 URL，避免历史版本通过另一条公开地址继续提供旧实现。正式 Worker 地址保持可用。
 
 ## 🔍 性能优化
 
@@ -321,7 +330,6 @@ Worker 支持只读 Git Smart HTTP（`clone`、`fetch`、`pull`），不支持 `
 ### 🌐 网络层优化
 
 - ✅ **HTTP/3 & HTTP/2** - 多路复用，减少连接开销
-- ✅ **Early Hints** - 提前预连接，降低首字节时间
 - ✅ **Keep-Alive** - 连接复用，减少 TCP 握手
 - ✅ **Smart DNS** - 使用 Cloudflare DNS (1.1.1.1)
 

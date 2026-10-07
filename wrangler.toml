@@ -1,12 +1,30 @@
 name = "github-proxy"
 main = "worker.js"
 compatibility_date = "2023-12-01"
+preview_urls = false
+
+[[ratelimits]]
+name = "REQUEST_LIMITER"
+namespace_id = "10707001"
+simple = { limit = 120, period = 60 }
 
 # Worker configuration | Worker 配置
 # https://developers.cloudflare.com/workers/configuration/
 
 [env.production]
 name = "github-proxy"
+preview_urls = false
+
+[[env.production.ratelimits]]
+name = "REQUEST_LIMITER"
+namespace_id = "10707001"
+simple = { limit = 120, period = 60 }
 
 [env.staging]
 name = "github-proxy-issue3-staging"
+preview_urls = false
+
+[[env.staging.ratelimits]]
+name = "REQUEST_LIMITER"
+namespace_id = "10707004"
+simple = { limit = 120, period = 60 }
