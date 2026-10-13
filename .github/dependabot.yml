@@ -1,51 +1,28 @@
 version: 2
 updates:
-  - package-ecosystem: "npm"
-    directory: "/"
-    schedule:
-      interval: "cron"
-      cronjob: "17 3 * * *"
-      timezone: "Asia/Shanghai"
-    rebase-strategy: "auto"
-    open-pull-requests-limit: 20
-    labels:
-      - "dependencies"
-      - "automerge"
-    groups:
-      vitest-stack:
-        patterns:
-          - "vitest"
-          - "@cloudflare/vitest-plugin"
-        update-types:
-          - "minor"
-          - "patch"
-      worker-tooling:
-        patterns:
-          - "wrangler"
-          - "msw"
-          - "@msw/cloudflare"
-        update-types:
-          - "minor"
-          - "patch"
-    ignore:
-      # @cloudflare/vitest-plugin 1.x currently declares vitest ^4.1.0.
-      # Do not let a grouped major update recreate an uninstallable main.
-      - dependency-name: "vitest"
-        update-types:
-          - "version-update:semver-major"
-
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "cron"
-      cronjob: "47 3 * * *"
-      timezone: "Asia/Shanghai"
-    rebase-strategy: "auto"
-    open-pull-requests-limit: 20
-    labels:
-      - "dependencies"
-      - "automerge"
-    groups:
-      github-actions:
-        patterns:
-          - "*"
+- package-ecosystem: github-actions
+  directory: /
+  schedule:
+    interval: daily
+    time: 08:00
+    timezone: Asia/Shanghai
+  open-pull-requests-limit: 20
+  groups:
+    dependencies:
+      patterns:
+      - '*'
+  commit-message:
+    prefix: chore(deps)
+- package-ecosystem: npm
+  directory: /
+  schedule:
+    interval: daily
+    time: 08:00
+    timezone: Asia/Shanghai
+  open-pull-requests-limit: 20
+  groups:
+    dependencies:
+      patterns:
+      - '*'
+  commit-message:
+    prefix: chore(deps)

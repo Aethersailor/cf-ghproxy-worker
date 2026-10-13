@@ -1,181 +1,87 @@
 name: Dependabot auto-merge
-
-on:
-  workflow_run:
-    workflows:
-      - Deploy to Cloudflare Workers
-    types: [completed]
+'on':
+  pull_request_target:
+    types:
+    - opened
+    - reopened
+    - synchronize
+    - ready_for_review
   schedule:
-    - cron: "7,22,37,52 * * * *"
-  workflow_dispatch:
-
-concurrency:
-  group: dependabot-auto-merge-${{ github.repository }}
-  cancel-in-progress: false
-
+  - cron: 23 */6 * * *
+  workflow_dispatch: null
 permissions:
-  actions: write
   contents: write
   pull-requests: write
-
+  actions: write
+concurrency:
+  group: dependabot-auto-merge
+  cancel-in-progress: false
 jobs:
   merge:
-    name: Merge one trusted dependency update
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Merge the first ready Dependabot pull request
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          api_get() {
-            local endpoint="$1"
-            local attempt
-            for attempt in 1 2 3; do
-              if gh api "$endpoint" 2>/dev/null; then
-                return 0
-              fi
-              sleep $((attempt * 2))
-            done
-            return 1
+    - name: Merge current Dependabot updates
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+      env:
+        AFTER_MERGE_WORKFLOWS: '["codeql.yml", "deploy.yml"]'
+      with:
+        script: |
+          const repo = context.repo;
+          const {data: repository} = await github.rest.repos.get(repo);
+          const base = repository.default_branch;
+          const pulls = await github.paginate(github.rest.pulls.list, {...repo, state: 'open', base, per_page: 100});
+          const manifests = /(^|\/)(package(?:-lock)?\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|go\.(mod|sum)|requirements[^/]*\.txt|pyproject\.toml|uv\.lock|Pipfile(?:\.lock)?|poetry\.lock|setup\.(py|cfg)|Cargo\.(toml|lock)|Gemfile(?:\.lock)?|composer\.(json|lock)|\.gitmodules|Dockerfile[^/]*|[^/]+\.dockerfile)$/i;
+          let merged = 0;
+          for (const candidate of pulls) {
+            let {data: pr} = await github.rest.pulls.get({...repo, pull_number: candidate.number});
+            if (pr.user.login !== 'dependabot[bot]' || pr.user.type !== 'Bot' || pr.draft ||
+                pr.base.ref !== base || pr.head.repo?.full_name !== repository.full_name ||
+                !pr.head.ref.startsWith('dependabot/')) continue;
+            const files = await github.paginate(github.rest.pulls.listFiles, {...repo, pull_number: pr.number, per_page: 100});
+            if (!files.length || !files.every(file => manifests.test(file.filename) ||
+                /^\.github\/workflows\/[^/]+\.ya?ml$/.test(file.filename) ||
+                /^\.github\/actions\/.+\/action\.ya?ml$/.test(file.filename))) {
+              core.warning(`PR #${pr.number} contains changes outside dependency files.`);
+              continue;
+            }
+            const {data: commit} = await github.rest.repos.getCommit({...repo, ref: pr.head.sha});
+            if (!commit.commit.verification?.verified) {
+              core.warning(`PR #${pr.number} does not have a verified head commit.`);
+              continue;
+            }
+            if (pr.mergeable === null) {
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              ({data: pr} = await github.rest.pulls.get({...repo, pull_number: pr.number}));
+            }
+            if (!pr.mergeable) {
+              try {
+                await github.rest.pulls.updateBranch({...repo, pull_number: pr.number, expected_head_sha: pr.head.sha});
+                core.info(`Updated PR #${pr.number}; a later event or scheduled run will merge it.`);
+              } catch (error) {
+                if (![403, 409, 422].includes(error.status)) throw error;
+                core.warning(`PR #${pr.number} is awaiting Dependabot conflict reconciliation: ${error.message}`);
+              }
+              continue;
+            }
+            try {
+              const result = await github.rest.pulls.merge({...repo, pull_number: pr.number, sha: pr.head.sha, merge_method: 'squash'});
+              if (!result.data.merged) continue;
+              merged++;
+              core.info(`Merged Dependabot PR #${pr.number} at ${result.data.sha}.`);
+            } catch (error) {
+              if (![405, 409, 422].includes(error.status)) throw error;
+              core.warning(`PR #${pr.number} changed or is not mergeable yet: ${error.message}`);
+            }
           }
-
-          default_branch=$(api_get "repos/$REPOSITORY" | jq -er '.default_branch')
-          default_sha=$(api_get \
-            "repos/$REPOSITORY/commits/$default_branch" | jq -er '.sha')
-
-          mapfile -t pull_requests < <(
-            api_get \
-              "repos/$REPOSITORY/pulls?state=open&base=$default_branch&sort=created&direction=asc&per_page=100" \
-              | jq -r '.[].number'
-          )
-
-          for pull_number in "${pull_requests[@]}"; do
-            if ! pull=$(api_get "repos/$REPOSITORY/pulls/$pull_number"); then
-              echo "Skipping PR #$pull_number because GitHub temporarily failed to return it"
-              continue
-            fi
-
-            author=$(jq -r '.user.login' <<<"$pull")
-            base_sha=$(jq -r '.base.sha' <<<"$pull")
-            head_ref=$(jq -r '.head.ref' <<<"$pull")
-            head_repo=$(jq -r '.head.repo.full_name // ""' <<<"$pull")
-            head_sha=$(jq -r '.head.sha' <<<"$pull")
-            title=$(jq -r '.title' <<<"$pull")
-
-            [[ "$author" == 'dependabot[bot]' ]] || continue
-            [[ $(jq -r '.draft' <<<"$pull") == false ]] || continue
-            [[ "$head_repo" == "$REPOSITORY" ]] || continue
-            [[ "$head_ref" == dependabot/* ]] || continue
-
-            if [[ "$base_sha" != "$default_sha" ]]; then
-              echo "Skipping stale PR #$pull_number until Dependabot rebases it"
-              continue
-            fi
-
-            if ! commits=$(api_get \
-                 "repos/$REPOSITORY/pulls/$pull_number/commits?per_page=100"); then
-              echo "Skipping PR #$pull_number because GitHub temporarily failed to return its commits"
-              continue
-            fi
-            if ! jq -e '
-              length > 0
-              and length < 100
-              and all(.[];
-                .author.login == "dependabot[bot]"
-                and .commit.verification.verified == true)
-            ' <<<"$commits" >/dev/null; then
-              echo "Skipping PR #$pull_number because it contains an untrusted commit"
-              continue
-            fi
-
-            if ! files=$(api_get \
-                 "repos/$REPOSITORY/pulls/$pull_number/files?per_page=100"); then
-              echo "Skipping PR #$pull_number because GitHub temporarily failed to return its files"
-              continue
-            fi
-            if ! jq -e '
-              length > 0
-              and length < 100
-              and all(.[].filename;
-                . == "package.json"
-                or . == "package-lock.json"
-                or test("^\\.github/workflows/[^/]+\\.ya?ml$"))
-            ' <<<"$files" >/dev/null; then
-              echo "Skipping PR #$pull_number because it changes non-dependency files"
-              continue
-            fi
-
-            runs=$(api_get \
-              "repos/$REPOSITORY/actions/runs?event=pull_request&head_sha=$head_sha&per_page=100")
-            gate=$(jq -c \
-              --arg sha "$head_sha" \
-              --argjson pull_number "$pull_number" '
-                [.workflow_runs[]
-                  | select(.name == "Deploy to Cloudflare Workers")
-                  | select(.head_sha == $sha)
-                  | select(any(.pull_requests[]?; .number == $pull_number))]
-                | sort_by(.id)
-                | last // null
-              ' <<<"$runs")
-            if [[ "$gate" == null ]] ||
-               [[ $(jq -r '.status' <<<"$gate") != completed ]] ||
-               [[ $(jq -r '.conclusion // ""' <<<"$gate") != success ]]; then
-              echo "Skipping PR #$pull_number because its validation is not successful"
-              continue
-            fi
-
-            gate_run_id=$(jq -r '.id' <<<"$gate")
-            gate_jobs=$(api_get \
-              "repos/$REPOSITORY/actions/runs/$gate_run_id/jobs?per_page=100")
-            if ! jq -e '
-              any(.jobs[];
-                .name == "Test and validate" and .conclusion == "success")
-            ' <<<"$gate_jobs" >/dev/null; then
-              echo "Skipping PR #$pull_number because npm/Worker validation did not pass"
-              continue
-            fi
-
-            fresh_pull=$(api_get "repos/$REPOSITORY/pulls/$pull_number")
-            if ! jq -e \
-              --arg author "$author" \
-              --arg base "$default_branch" \
-              --arg base_sha "$default_sha" \
-              --arg repo "$REPOSITORY" \
-              --arg head "$head_sha" '
-                .state == "open"
-                and (.draft | not)
-                and .user.login == $author
-                and .base.ref == $base
-                and .base.sha == $base_sha
-                and .head.repo.full_name == $repo
-                and .head.sha == $head
-                and .mergeable == true
-              ' <<<"$fresh_pull" >/dev/null; then
-              echo "Skipping PR #$pull_number because it changed or is not currently mergeable"
-              continue
-            fi
-
-            commit_title="$title (#$pull_number)"
-            if ! response=$(gh api --method PUT \
-                 "repos/$REPOSITORY/pulls/$pull_number/merge" \
-                 -f merge_method=squash \
-                 -f sha="$head_sha" \
-                 -f commit_title="$commit_title" 2>&1); then
-              echo "GitHub deferred PR #$pull_number: $response"
-              continue
-            fi
-            merge_sha=$(jq -er 'select(.merged == true) | .sha' <<<"$response")
-
-            # GITHUB_TOKEN merges do not emit ordinary push workflows.
-            gh workflow run deploy.yml --repo "$REPOSITORY" \
-              --ref "$default_branch" -f target=production
-            echo "Merged PR #$pull_number as $merge_sha and dispatched production deployment"
-            exit 0
-          done
-
-          echo "No ready Dependabot pull request required merging"
+          if (merged) {
+            const workflows = JSON.parse(process.env.AFTER_MERGE_WORKFLOWS);
+            for (const workflow_id of workflows) {
+              try {
+                await github.rest.actions.createWorkflowDispatch({...repo, workflow_id, ref: base});
+              } catch (error) {
+                core.warning(`Post-merge workflow ${workflow_id} could not be dispatched: ${error.message}`);
+              }
+            }
+          }
+          await core.summary.addRaw(`Merged ${merged} Dependabot pull request(s). CodeQL and builds do not gate merging.`).write();
