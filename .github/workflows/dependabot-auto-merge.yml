@@ -70,9 +70,7 @@ jobs:
 
           # Repository-token merges need an explicit follow-up workflow dispatch.
           if (( merged > 0 )); then
-            if jq -e true <<<"$merged_files" >/dev/null; then
-              gh workflow run 'codeql.yml' --repo "$REPOSITORY" --ref "$BASE_BRANCH" || result=1
-            fi
+            gh workflow run codeql.yml --repo "$REPOSITORY" --ref "$BASE_BRANCH" || result=1
             if jq -e 'any(.[]; . as $path | reduce ([{"regex":"^worker\\.js$","include":true},{"regex":"^wrangler\\.toml$","include":true},{"regex":"^package\\.json$","include":true},{"regex":"^package\\-lock\\.json$","include":true},{"regex":"^\\.github/workflows/deploy\\.yml$","include":true}][]) as $pattern (false; if ($path | test($pattern.regex)) then $pattern.include else . end))' <<<"$merged_files" >/dev/null; then
               gh workflow run 'deploy.yml' --repo "$REPOSITORY" --ref "$BASE_BRANCH" || result=1
             fi
