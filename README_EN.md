@@ -298,16 +298,12 @@ Customize the following parameters in `worker.js`:
 
 | Parameter | Default | Description |
 |:----------|:-------:|:------------|
-| `EDGE_CACHE_SECONDS` | `2592000` (30 days) | Edge cache TTL |
 | `SWR_SECONDS` | `86400` (1 day) | Stale-while-revalidate duration |
-| `BROWSER_CACHE_SECONDS` | `3600` (1 hour) | Browser cache TTL |
 
 ### Performance Configuration
 
 | Parameter | Default | Description |
 |:----------|:-------:|:------------|
-| `ENABLE_COMPRESSION` | `true` | Enable Brotli/Gzip compression |
-| `ENABLE_EARLY_HINTS` | `true` | Enable Early Hints (HTTP 103) |
 | `MAX_RETRIES` | `2` | Maximum retry attempts |
 | `RETRY_DELAY_MS` | `500` | Retry interval (milliseconds) |
 | `REQUEST_TIMEOUT_MS` | `30000` | Request timeout (milliseconds) |

@@ -15,6 +15,10 @@ updates:
     prefix: chore(deps)
 - package-ecosystem: npm
   directory: /
+  ignore:
+  - dependency-name: undici
+    update-types:
+    - version-update:semver-major
   schedule:
     interval: daily
     time: 08:00

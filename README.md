@@ -298,15 +298,12 @@ Worker 支持只读 Git Smart HTTP（`clone`、`fetch`、`pull`），不支持 `
 
 | 参数 | 默认值 | 说明 |
 |:-----|:------:|:-----|
-| `EDGE_CACHE_SECONDS` | `2592000` (30天) | 边缘缓存 TTL |
 | `SWR_SECONDS` | `86400` (1天) | 过期后仍可用时间 |
-| `BROWSER_CACHE_SECONDS` | `3600` (1小时) | 浏览器缓存 TTL |
 
 ### 性能配置
 
 | 参数 | 默认值 | 说明 |
 |:-----|:------:|:-----|
-| `ENABLE_COMPRESSION` | `true` | 启用 Brotli/Gzip 压缩 |
 | `MAX_RETRIES` | `2` | 请求失败最大重试次数 |
 | `RETRY_DELAY_MS` | `500` | 重试间隔（毫秒） |
 | `REQUEST_TIMEOUT_MS` | `30000` | 请求超时时间（毫秒） |
