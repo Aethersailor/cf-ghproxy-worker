@@ -1,12 +1,9 @@
 // ==================== 配置项 Configuration ====================
 
 // 缓存 TTL 设置 | Cache TTL settings
-const EDGE_CACHE_SECONDS = 2592000;  // 边缘缓存：30 天 | Edge cache: 30 days
 const SWR_SECONDS = 86400;           // 过期后仍可用时间：1 天 | Stale-while-revalidate: 1 day
-const BROWSER_CACHE_SECONDS = 3600;  // 浏览器缓存：1 小时 | Browser cache: 1 hour
 
 // 性能优化配置 | Performance optimization settings
-const ENABLE_COMPRESSION = true;      // 启用 Brotli/Gzip 压缩 | Enable Brotli/Gzip compression
 const MAX_RETRIES = 2;                // 最大重试次数 | Max retry attempts
 const RETRY_DELAY_MS = 500;           // 重试延迟（毫秒）| Retry delay in milliseconds
 const REQUEST_TIMEOUT_MS = 30000;     // 请求超时：30 秒 | Request timeout: 30 seconds
@@ -28,13 +25,6 @@ const GITHUB_HOSTS = [
     "gist.githubusercontent.com",
     "github.githubassets.com",
     "codeload.github.com"
-];
-
-// 备用镜像源（可选，用于降级）| Fallback mirrors (optional, for degradation)
-const FALLBACK_MIRRORS = [
-    // 可以添加其他 GitHub 镜像站 | Add other GitHub mirror sites here
-    // "hub.fastgit.xyz",
-    // "github.com.cnpmjs.org"
 ];
 
 // ===============================================================
@@ -1184,28 +1174,6 @@ async function fetchWithRetry(url, options, retries = MAX_RETRIES) {
             throw error;
         }
     }
-}
-
-/**
- * 判断内容类型是否应该压缩
- * Check if content type should be compressed
- * 
- * @param {string} contentType - Content-Type 头的值 | Content-Type header value
- * @returns {boolean} 如果内容应该被压缩则返回 true | True if content should be compressed
- */
-function shouldCompress(contentType) {
-    if (!contentType) return false;
-
-    const compressibleTypes = [
-        'text/',
-        'application/javascript',
-        'application/json',
-        'application/xml',
-        'application/x-yaml',
-        'image/svg+xml'
-    ];
-
-    return compressibleTypes.some(type => contentType.includes(type));
 }
 
 /**
