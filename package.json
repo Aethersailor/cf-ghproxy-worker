@@ -13,6 +13,6 @@
   },
   "devDependencies": {
     "undici": "^8.12.4",
-    "wrangler": "^4.159.0"
+    "wrangler": "^4.160.0"
   }
 }
